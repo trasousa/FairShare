@@ -6,7 +6,7 @@ services:
     image: fairshare-app:latest
     container_name: fairshare
     ports:
-      - "3000:3000"
+      - "3005:3000"
     volumes:
       - ./fairshare-data:/app/data
     restart: unless-stopped
