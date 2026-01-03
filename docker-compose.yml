@@ -1,0 +1,12 @@
+version: '3.8'
+
+services:
+  fairshare-app:
+    build: .
+    image: fairshare-app:latest
+    container_name: fairshare
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./fairshare-data:/app/data
+    restart: unless-stopped
