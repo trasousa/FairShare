@@ -1,14 +1,15 @@
 import React, { useState } from 'react';
 import { IncomeEntry, AccountType, User, CurrencyCode } from '../types';
 import { formatCurrency } from '../services/financeService';
-import { Plus, Trash2, ArrowUpRight } from 'lucide-react';
+import { Plus, Trash2, ArrowUpRight, Calendar as CalendarIcon } from 'lucide-react';
+import { MonthPicker } from './MonthPicker';
 
 interface IncomeManagerProps {
   incomes: IncomeEntry[];
   currentMonth: string;
   users: Record<string, User>;
   currency: CurrencyCode;
-  onAddIncome: (source: string, amount: number, recipient: AccountType, isRecurring: boolean) => void;
+  onAddIncome: (source: string, amount: number, recipient: AccountType, isRecurring: boolean, monthId: string) => void;
   onDeleteIncome: (id: string) => void;
 }
 
@@ -17,6 +18,8 @@ export const IncomeManager: React.FC<IncomeManagerProps> = ({ incomes, currentMo
   const [amount, setAmount] = useState('');
   const [recipient, setRecipient] = useState<AccountType>('USER_1');
   const [isRecurring, setIsRecurring] = useState(false);
+  const [incomeMonth, setIncomeMonth] = useState(currentMonth);
+  const [isMonthPickerOpen, setIsMonthPickerOpen] = useState(false);
 
   const monthlyIncomes = incomes.filter(i => i.monthId === currentMonth);
   const totalMonthlyIncome = monthlyIncomes.reduce((sum, i) => sum + i.amount, 0);
@@ -24,7 +27,7 @@ export const IncomeManager: React.FC<IncomeManagerProps> = ({ incomes, currentMo
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (source && amount) {
-      onAddIncome(source, parseFloat(amount), recipient, isRecurring);
+      onAddIncome(source, parseFloat(amount), recipient, isRecurring, incomeMonth);
       setSource('');
       setAmount('');
       setIsRecurring(false);
@@ -33,6 +36,15 @@ export const IncomeManager: React.FC<IncomeManagerProps> = ({ incomes, currentMo
 
   return (
     <div className="space-y-6">
+      <MonthPicker
+        isOpen={isMonthPickerOpen}
+        onClose={() => setIsMonthPickerOpen(false)}
+        currentMonthId={incomeMonth}
+        onSelect={(month) => {
+          setIncomeMonth(month);
+          setIsMonthPickerOpen(false);
+        }}
+      />
       <div className="flex justify-between items-center">
         <div>
            <h2 className="text-xl font-bold text-slate-800 flex items-center gap-2">
@@ -63,19 +75,32 @@ export const IncomeManager: React.FC<IncomeManagerProps> = ({ incomes, currentMo
                         required 
                     />
                 </div>
-                <div>
-                    <label className="block text-xs font-semibold text-slate-500 mb-1">Amount</label>
-                    <div className="relative">
-                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 font-bold">$</span>
-                        <input 
-                            type="number" 
-                            value={amount} 
-                            onChange={e => setAmount(e.target.value)} 
-                            placeholder="0.00" 
-                            className="w-full text-sm border border-slate-300 rounded-lg pl-8 pr-2.5 py-2.5 outline-none focus:ring-2 focus:ring-emerald-100 font-bold text-slate-700" 
-                            required 
-                        />
-                    </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                      <label className="block text-xs font-semibold text-slate-500 mb-1">Amount</label>
+                      <div className="relative">
+                          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 font-bold">$</span>
+                          <input 
+                              type="number" 
+                              value={amount} 
+                              onChange={e => setAmount(e.target.value)} 
+                              placeholder="0.00" 
+                              className="w-full text-sm border border-slate-300 rounded-lg pl-8 pr-2.5 py-2.5 outline-none focus:ring-2 focus:ring-emerald-100 font-bold text-slate-700" 
+                              required 
+                          />
+                      </div>
+                  </div>
+                   <div>
+                      <label className="block text-xs font-semibold text-slate-500 mb-1">Month</label>
+                      <button
+                        type="button"
+                        onClick={() => setIsMonthPickerOpen(true)}
+                        className="w-full text-sm border border-slate-300 rounded-lg p-2.5 outline-none focus:ring-2 focus:ring-emerald-100 text-left flex items-center gap-2"
+                      >
+                        <CalendarIcon size={14} className="text-slate-400" />
+                        {new Date(incomeMonth).toLocaleString('default', { month: 'long', year: 'numeric' })}
+                      </button>
+                  </div>
                 </div>
                 <div>
                     <label className="block text-xs font-semibold text-slate-500 mb-1">Recipient</label>

@@ -1,9 +1,8 @@
-import React, { useState, useMemo } from 'react';
+import React, { useMemo } from 'react';
 import { ExpenseEntry, Budget, Category, SavingsGoal, IncomeEntry, User, CurrencyCode } from '../types';
 import { AccountSummary } from './AccountSummary';
 import { formatCurrency } from '../services/financeService';
-import { ChevronLeft, ChevronRight, PieChart, Calendar as CalendarIcon, TrendingUp } from 'lucide-react';
-import { MonthPicker } from './MonthPicker';
+import { PieChart, TrendingUp } from 'lucide-react';
 
 interface MonthlyDashboardProps {
   entries: ExpenseEntry[];
@@ -13,26 +12,17 @@ interface MonthlyDashboardProps {
   incomes: IncomeEntry[];
   users: Record<string, User>;
   currency: CurrencyCode;
+  currentMonth: string;
 }
 
-export const MonthlyDashboard: React.FC<MonthlyDashboardProps> = ({ entries, budgets, categories, savings, incomes, users, currency }) => {
-  const [selectedMonth, setSelectedMonth] = useState('2024-05');
-  const [isMonthPickerOpen, setIsMonthPickerOpen] = useState(false);
-
-  const changeMonth = (direction: -1 | 1) => {
-      const [year, month] = selectedMonth.split('-').map(Number);
-      const date = new Date(year, month - 1 + direction);
-      const newMonth = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
-      setSelectedMonth(newMonth);
-  };
-
-  const monthLabel = new Date(selectedMonth).toLocaleString('default', { month: 'long', year: 'numeric' });
+export const MonthlyDashboard: React.FC<MonthlyDashboardProps> = ({ entries, budgets, categories, savings, incomes, users, currency, currentMonth }) => {
+  const monthLabel = new Date(currentMonth).toLocaleString('default', { month: 'long', year: 'numeric' });
 
   const monthlyEntries = useMemo(() => 
-    entries.filter(e => e.monthId === selectedMonth), 
-  [entries, selectedMonth]);
+    entries.filter(e => e.monthId === currentMonth), 
+  [entries, currentMonth]);
 
-  const monthlyIncomes = incomes.filter(i => i.monthId === selectedMonth);
+  const monthlyIncomes = incomes.filter(i => i.monthId === currentMonth);
   
   const incomeU1 = monthlyIncomes.filter(i => i.recipient === 'USER_1').reduce((sum, i) => sum + i.amount, 0) 
                  || users.user_1.monthlyIncome; 
@@ -89,48 +79,43 @@ export const MonthlyDashboard: React.FC<MonthlyDashboardProps> = ({ entries, bud
   const user2Contribution = sharedBudgetNeed * (1 - user1Ratio);
 
   const categoryBreakdown = useMemo(() => {
-      const breakdown: { cat: Category, amount: number, account: string, isSavings: boolean }[] = [];
-      categories.forEach(cat => {
-          const amount = monthlyEntries
-            .filter(e => e.categoryId === cat.id)
+    return categories.map(cat => {
+        const entriesForCat = monthlyEntries.filter(e => e.categoryId === cat.id);
+        
+        const spentByUser1 = entriesForCat
+            .filter(e => e.account === 'USER_1')
             .reduce((sum, e) => sum + e.amount, 0);
-          
-          if (amount > 0) {
-              breakdown.push({ cat, amount, account: cat.defaultAccount, isSavings: cat.group === 'SAVINGS' });
-          }
-      });
-      return breakdown.sort((a, b) => b.amount - a.amount);
+            
+        const spentByUser2 = entriesForCat
+            .filter(e => e.account === 'USER_2')
+            .reduce((sum, e) => sum + e.amount, 0);
+
+        const spentShared = entriesForCat
+            .filter(e => e.account === 'SHARED')
+            .reduce((sum, e) => sum + e.amount, 0);
+
+        const totalSpent = spentByUser1 + spentByUser2 + spentShared;
+
+        return {
+            cat,
+            isSavings: cat.group === 'SAVINGS',
+            spentByUser1,
+            spentByUser2,
+            spentShared,
+            totalSpent
+        };
+    })
+    .filter(item => item.totalSpent > 0)
+    .sort((a, b) => b.totalSpent - a.totalSpent);
   }, [categories, monthlyEntries]);
 
-  return (
+    return (
     <div className="space-y-8">
-        <MonthPicker 
-            isOpen={isMonthPickerOpen} 
-            onClose={() => setIsMonthPickerOpen(false)} 
-            currentMonthId={selectedMonth}
-            onSelect={setSelectedMonth}
-        />
-
-        <div className="flex flex-col sm:flex-row justify-between items-center bg-white p-4 rounded-xl shadow-sm border border-slate-200 gap-4">
+        <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-200">
             <h2 className="text-lg font-bold text-slate-800 flex items-center gap-2">
                 <PieChart className="text-indigo-600" size={20}/>
                 Monthly Deep Dive
             </h2>
-            <div className="flex items-center bg-slate-100 rounded-lg p-1">
-                <button onClick={() => changeMonth(-1)} className="p-1.5 hover:bg-white hover:shadow-sm rounded-md text-slate-500 transition">
-                    <ChevronLeft size={16} />
-                </button>
-                <button 
-                    onClick={() => setIsMonthPickerOpen(true)}
-                    className="px-4 py-1.5 text-sm font-semibold text-slate-700 w-40 text-center select-none hover:bg-white hover:shadow-sm rounded-md transition flex items-center justify-center gap-2"
-                >
-                    <CalendarIcon size={14} className="text-slate-400"/>
-                    {monthLabel}
-                </button>
-                <button onClick={() => changeMonth(1)} className="p-1.5 hover:bg-white hover:shadow-sm rounded-md text-slate-500 transition">
-                    <ChevronRight size={16} />
-                </button>
-            </div>
         </div>
         
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -232,8 +217,10 @@ export const MonthlyDashboard: React.FC<MonthlyDashboardProps> = ({ entries, bud
                     <thead className="bg-slate-50 text-slate-500 font-medium">
                         <tr>
                             <th className="px-6 py-3">Category</th>
-                            <th className="px-6 py-3">Account</th>
-                            <th className="px-6 py-3 text-right">Spent/Saved</th>
+                            <th className="px-6 py-3 text-right">{users.user_1.name}</th>
+                            <th className="px-6 py-3 text-right">{users.user_2.name}</th>
+                            <th className="px-6 py-3 text-right">Shared</th>
+                            <th className="px-6 py-3 text-right font-bold">Total</th>
                             <th className="px-6 py-3 text-right">Budget</th>
                             <th className="px-6 py-3 text-right">Status</th>
                         </tr>
@@ -241,7 +228,7 @@ export const MonthlyDashboard: React.FC<MonthlyDashboardProps> = ({ entries, bud
                     <tbody className="divide-y divide-slate-100">
                         {categoryBreakdown.map((item) => {
                             const budget = budgets.find(b => b.categoryId === item.cat.id)?.limit || 0;
-                            const isOver = budget > 0 && item.amount > budget;
+                            const isOver = budget > 0 && item.totalSpent > budget;
                             
                             return (
                                 <tr key={item.cat.id} className="hover:bg-slate-50 transition">
@@ -249,20 +236,15 @@ export const MonthlyDashboard: React.FC<MonthlyDashboardProps> = ({ entries, bud
                                         {item.isSavings && <TrendingUp size={14} className="text-emerald-500" />}
                                         {item.cat.name}
                                     </td>
-                                    <td className="px-6 py-3">
-                                        <span className={`text-xs font-bold px-2 py-1 rounded-md ${
-                                            item.account === 'SHARED' ? 'bg-purple-100 text-purple-700' :
-                                            item.account === 'USER_1' ? 'bg-blue-100 text-blue-700' : 'bg-pink-100 text-pink-700'
-                                        }`}>
-                                            {item.account === 'SHARED' ? 'Shared' : item.account === 'USER_1' ? users.user_1.name : users.user_2.name}
-                                        </span>
-                                    </td>
-                                    <td className={`px-6 py-3 text-right font-semibold ${item.isSavings ? 'text-emerald-600' : 'text-slate-700'}`}>{formatCurrency(item.amount, currency)}</td>
+                                    <td className="px-6 py-3 text-right text-slate-600">{formatCurrency(item.spentByUser1, currency)}</td>
+                                    <td className="px-6 py-3 text-right text-slate-600">{formatCurrency(item.spentByUser2, currency)}</td>
+                                    <td className="px-6 py-3 text-right text-slate-600">{formatCurrency(item.spentShared, currency)}</td>
+                                    <td className={`px-6 py-3 text-right font-semibold ${item.isSavings ? 'text-emerald-600' : 'text-slate-800'}`}>{formatCurrency(item.totalSpent, currency)}</td>
                                     <td className="px-6 py-3 text-right text-slate-500">{budget > 0 ? formatCurrency(budget, currency) : '-'}</td>
                                     <td className="px-6 py-3 text-right">
                                         {budget > 0 ? (
                                             <span className={`text-xs font-bold ${isOver ? 'text-red-500' : 'text-emerald-500'}`}>
-                                                {Math.round((item.amount / budget) * 100)}%
+                                                {Math.round((item.totalSpent / budget) * 100)}%
                                             </span>
                                         ) : <span className="text-slate-400 text-xs">-</span>}
                                     </td>
@@ -271,7 +253,7 @@ export const MonthlyDashboard: React.FC<MonthlyDashboardProps> = ({ entries, bud
                         })}
                         {categoryBreakdown.length === 0 && (
                             <tr>
-                                <td colSpan={5} className="px-6 py-8 text-center text-slate-400">No expenses recorded for this month.</td>
+                                <td colSpan={7} className="px-6 py-8 text-center text-slate-400">No expenses recorded for this month.</td>
                             </tr>
                         )}
                     </tbody>

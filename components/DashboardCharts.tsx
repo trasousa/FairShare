@@ -73,7 +73,7 @@ export const DashboardCharts: React.FC<DashboardChartsProps> = ({ entries, categ
   const pieData = Array.from(catMap.entries())
     .map(([name, value]) => ({ name, value }))
     .sort((a, b) => b.value - a.value)
-    .slice(0, 5);
+    .slice(0, 10);
 
   const COLORS = ['#6366f1', '#ec4899', '#3b82f6', '#10b981', '#f59e0b'];
 
@@ -83,7 +83,7 @@ export const DashboardCharts: React.FC<DashboardChartsProps> = ({ entries, categ
          return cat?.group !== 'SAVINGS';
     })
     .sort((a, b) => b.amount - a.amount)
-    .slice(0, 5);
+    .slice(0, 10);
 
   return (
     <div className="space-y-6">
@@ -165,7 +165,7 @@ export const DashboardCharts: React.FC<DashboardChartsProps> = ({ entries, categ
                             </PieChart>
                          </ResponsiveContainer>
                          <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                            <span className="text-xs text-slate-400 font-medium">Top 5</span>
+                            <span className="text-xs text-slate-400 font-medium">Top 10</span>
                          </div>
                      </div>
                      <div className="flex-1 space-y-3">

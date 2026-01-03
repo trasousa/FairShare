@@ -87,7 +87,8 @@ export const createNewInstance = async (
     name: string, 
     currency: CurrencyCode, 
     user1: { name: string, income: number, avatar: string },
-    user2: { name: string, income: number, avatar: string }
+    user2: { name: string, income: number, avatar: string },
+    categories: Category[]
 ): Promise<AppInstance> => {
     
     const users: Record<string, User> = {
@@ -107,8 +108,6 @@ export const createNewInstance = async (
         }
     };
 
-    const startingCategories = INITIAL_CATEGORIES.filter(c => c.group !== 'SAVINGS');
-
     const newInstance: AppInstance = {
         id: generateId(),
         name,
@@ -118,7 +117,7 @@ export const createNewInstance = async (
         users,
         data: {
             entries: [],
-            categories: startingCategories, 
+            categories: categories, 
             budgets: [],
             savings: [],
             trips: [],

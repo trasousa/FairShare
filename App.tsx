@@ -328,7 +328,7 @@ function App({ instanceId, onExit }: AppProps) {
           
           {activeTab === 'overview' && <DashboardCharts entries={filteredDashboardEntries} categories={categories} incomes={incomes} users={users} currency={currency} />}
 
-          {activeTab === 'monthly' && <MonthlyDashboard entries={entries} budgets={budgets} categories={categories} savings={savings} incomes={incomes} users={users} currency={currency} />}
+          {activeTab === 'monthly' && <MonthlyDashboard currentMonth={currentMonth} entries={entries} budgets={budgets} categories={categories} savings={savings} incomes={incomes} users={users} currency={currency} />}
 
           {activeTab === 'tracker' && (
               <div className="space-y-6">
@@ -406,7 +406,7 @@ function App({ instanceId, onExit }: AppProps) {
                         currentMonth={currentMonth} 
                         users={users} 
                         currency={currency} 
-                        onAddIncome={(s, a, r, ir) => setIncomes(p => [...p, {id: Math.random().toString(36), monthId: currentMonth, source: s, amount: a, recipient: r, isRecurring: ir}])} 
+                        onAddIncome={(s, a, r, ir, mid) => setIncomes(p => [...p, {id: Math.random().toString(36), monthId: mid, source: s, amount: a, recipient: r, isRecurring: ir}])} 
                         onDeleteIncome={(id) => setIncomes(p => p.filter(i => i.id !== id))} 
                       />
                   )}
