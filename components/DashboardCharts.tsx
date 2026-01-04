@@ -28,17 +28,16 @@ interface DashboardChartsProps {
 
 export const DashboardCharts: React.FC<DashboardChartsProps> = ({ entries, categories, incomes, users, currency }) => {
   const [expandedGroupId, setExpandedGroupId] = useState<string | null>(null);
-  
-  if (!users || !users.user_1 || !users.user_2) {
-      return <div className="p-8 text-center text-slate-400 font-medium">Preparing Dashboard...</div>;
-  }
-
   const [visibleBars, setVisibleBars] = useState<Record<string, boolean>>({
       INCOME: true,
       SHARED: true,
       USER_1: true,
       USER_2: true
   });
+
+  if (!users || !users.user_1 || !users.user_2) {
+      return <div className="p-8 text-center text-slate-400 font-medium">Preparing Dashboard...</div>;
+  }
 
   // --- Data Processing for Charts ---
   const monthMap = new Map<string, { month: string, SHARED: number, USER_1: number, USER_2: number, INCOME: number, SAVINGS: number }>();
@@ -95,7 +94,6 @@ export const DashboardCharts: React.FC<DashboardChartsProps> = ({ entries, categ
 
   const COLORS = ['#6366f1', '#ec4899', '#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4', '#f97316', '#84cc16'];
 
-  // --- Totals for Summary Cards ---
   const totals = useMemo(() => {
       const t = { SHARED: 0, USER_1: 0, USER_2: 0 };
       entries.forEach(e => {
@@ -107,73 +105,65 @@ export const DashboardCharts: React.FC<DashboardChartsProps> = ({ entries, categ
       return t;
   }, [entries, categories]);
 
-  // --- Grouping Logic for "Biggest Expenses" ---
+  // --- Grouping Logic ---
   
-  // 1. Fixed Expenses (Grouped by Category Name) - NOW WITH ENTRIES
-  const fixedExpenses = useMemo(() => {
-      const fixedMap = new Map<string, { key: string, name: string, amount: number, account: AccountType, count: number, entries: ExpenseEntry[] }>();
-      entries.forEach(e => {
-          const cat = categories.find(c => c.id === e.categoryId);
-          if (cat?.group === 'FIXED') {
-              const key = cat.name;
-              if (!fixedMap.has(key)) {
-                  fixedMap.set(key, { key, name: key, amount: 0, account: e.account, count: 0, entries: [] });
+  // Helper for grouping
+  const groupEntries = (filteredEntries: ExpenseEntry[], groupBy: 'CATEGORY' | 'CONSECUTIVE') => {
+      if (groupBy === 'CATEGORY') {
+          const map = new Map<string, { key: string, name: string, amount: number, account: AccountType, count: number, entries: ExpenseEntry[] }>();
+          filteredEntries.forEach(e => {
+              const cat = categories.find(c => c.id === e.categoryId);
+              const key = cat?.name || 'Unknown';
+              if (!map.has(key)) {
+                  map.set(key, { key, name: key, amount: 0, account: e.account, count: 0, entries: [] });
               }
-              const item = fixedMap.get(key)!;
+              const item = map.get(key)!;
               item.amount += e.amount;
               item.count += 1;
               item.entries.push(e);
+          });
+          return Array.from(map.values()).sort((a, b) => b.amount - a.amount);
+      } else {
+          // Consecutive Logic
+          const sorted = [...filteredEntries].sort((a, b) => b.monthId.localeCompare(a.monthId));
+          const groups: { key: string, name: string, amount: number, total: number, entries: ExpenseEntry[], account: AccountType }[] = [];
+          if (sorted.length === 0) return [];
+
+          let current = {
+              key: sorted[0].id,
+              name: categories.find(c => c.id === sorted[0].categoryId)?.name || 'Unknown',
+              amount: sorted[0].amount,
+              total: sorted[0].amount,
+              entries: [sorted[0]],
+              account: sorted[0].account
+          };
+
+          for (let i = 1; i < sorted.length; i++) {
+              const e = sorted[i];
+              const name = categories.find(c => c.id === e.categoryId)?.name || 'Unknown';
+              if (name === current.name && Math.abs(e.amount - current.amount) < 0.01 && e.account === current.account) {
+                  current.entries.push(e);
+                  current.total += e.amount;
+              } else {
+                  groups.push(current);
+                  current = { key: e.id, name, amount: e.amount, total: e.amount, entries: [e], account: e.account };
+              }
           }
-      });
-      return Array.from(fixedMap.values()).sort((a, b) => b.amount - a.amount);
-  }, [entries, categories]);
-
-  // 2. Variable Expenses
-  const variableExpenses = useMemo(() => {
-      const variableEntries = entries
-        .filter(e => {
-            const cat = categories.find(c => c.id === e.categoryId);
-            return cat?.group !== 'FIXED' && cat?.group !== 'SAVINGS';
-        })
-        .sort((a, b) => b.monthId.localeCompare(a.monthId));
-
-      const groups: { key: string, catName: string, amount: number, total: number, entries: ExpenseEntry[], account: AccountType }[] = [];
-      
-      if (variableEntries.length === 0) return [];
-
-      let currentGroup = {
-          key: variableEntries[0].id,
-          catName: categories.find(c => c.id === variableEntries[0].categoryId)?.name || 'Unknown',
-          amount: variableEntries[0].amount,
-          total: variableEntries[0].amount,
-          entries: [variableEntries[0]],
-          account: variableEntries[0].account
-      };
-
-      for (let i = 1; i < variableEntries.length; i++) {
-          const e = variableEntries[i];
-          const catName = categories.find(c => c.id === e.categoryId)?.name || 'Unknown';
-          
-          if (catName === currentGroup.catName && Math.abs(e.amount - currentGroup.amount) < 0.01 && e.account === currentGroup.account) {
-              currentGroup.entries.push(e);
-              currentGroup.total += e.amount;
-          } else {
-              groups.push(currentGroup);
-              currentGroup = {
-                  key: e.id,
-                  catName,
-                  amount: e.amount,
-                  total: e.amount,
-                  entries: [e],
-                  account: e.account
-              };
-          }
+          groups.push(current);
+          return groups.sort((a, b) => b.total - a.total).slice(0, 10);
       }
-      groups.push(currentGroup);
+  };
 
-      return groups.sort((a, b) => b.total - a.total).slice(0, 10);
+  const fixedExpenses = useMemo(() => {
+      return groupEntries(entries.filter(e => categories.find(c => c.id === e.categoryId)?.group === 'FIXED'), 'CATEGORY');
   }, [entries, categories]);
 
+  const variableExpenses = useMemo(() => {
+      return groupEntries(entries.filter(e => {
+          const g = categories.find(c => c.id === e.categoryId)?.group;
+          return g !== 'FIXED' && g !== 'SAVINGS';
+      }), 'CONSECUTIVE');
+  }, [entries, categories]);
 
   const toggleGroup = (key: string) => {
       setExpandedGroupId(prev => prev === key ? null : key);
@@ -192,34 +182,18 @@ export const DashboardCharts: React.FC<DashboardChartsProps> = ({ entries, categ
   return (
     <div className="space-y-6">
         
-        {/* Expense Summary Cards */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex items-center justify-between">
-                <div>
-                    <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Total Shared</p>
-                    <p className="text-xl font-bold text-slate-800">{formatCurrency(totals.SHARED, currency)}</p>
-                </div>
-                <div className="w-10 h-10 rounded-full bg-purple-100 flex items-center justify-center text-purple-600">
-                    <Users size={20} />
-                </div>
+                <div><p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Total Shared</p><p className="text-xl font-bold text-slate-800">{formatCurrency(totals.SHARED, currency)}</p></div>
+                <div className="w-10 h-10 rounded-full bg-purple-100 flex items-center justify-center text-purple-600"><Users size={20} /></div>
             </div>
             <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex items-center justify-between">
-                <div>
-                    <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Total {users.user_1.name}</p>
-                    <p className="text-xl font-bold text-slate-800">{formatCurrency(totals.USER_1, currency)}</p>
-                </div>
-                <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center text-blue-600">
-                    <UserIcon size={20} />
-                </div>
+                <div><p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Total {users.user_1.name}</p><p className="text-xl font-bold text-slate-800">{formatCurrency(totals.USER_1, currency)}</p></div>
+                <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center text-blue-600"><UserIcon size={20} /></div>
             </div>
             <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex items-center justify-between">
-                <div>
-                    <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Total {users.user_2.name}</p>
-                    <p className="text-xl font-bold text-slate-800">{formatCurrency(totals.USER_2, currency)}</p>
-                </div>
-                <div className="w-10 h-10 rounded-full bg-pink-100 flex items-center justify-center text-pink-600">
-                    <UserIcon size={20} />
-                </div>
+                <div><p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Total {users.user_2.name}</p><p className="text-xl font-bold text-slate-800">{formatCurrency(totals.USER_2, currency)}</p></div>
+                <div className="w-10 h-10 rounded-full bg-pink-100 flex items-center justify-center text-pink-600"><UserIcon size={20} /></div>
             </div>
         </div>
 
@@ -230,32 +204,15 @@ export const DashboardCharts: React.FC<DashboardChartsProps> = ({ entries, categ
                     <ResponsiveContainer width="100%" height="100%">
                         <BarChart data={barData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
                             <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                            <XAxis 
-                                dataKey="month" 
-                                axisLine={false} 
-                                tickLine={false} 
-                                tick={{fill: '#64748b', fontSize: 12}} 
-                                tickFormatter={(val) => {
-                                    const [y, m] = val.split('-');
-                                    return new Date(parseInt(y), parseInt(m) - 1).toLocaleDateString('default', { month: 'short' });
-                                }}
-                            />
-                            <YAxis 
-                                axisLine={false} 
-                                tickLine={false} 
-                                tick={{fill: '#64748b', fontSize: 12}}
-                                tickFormatter={(val) => `${val/1000}k`}
-                            />
-                            <Tooltip 
-                                contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
-                                cursor={{fill: '#f8fafc'}}
-                            />
+                            <XAxis dataKey="month" axisLine={false} tickLine={false} tick={{fill: '#64748b', fontSize: 12}} tickFormatter={(val) => { const [y, m] = val.split('-'); return new Date(parseInt(y), parseInt(m) - 1).toLocaleDateString('default', { month: 'short' }); }} />
+                            <YAxis axisLine={false} tickLine={false} tick={{fill: '#64748b', fontSize: 12}} tickFormatter={(val) => `${val/1000}k`} />
+                            <Tooltip contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }} cursor={{fill: '#f8fafc'}} />
                             <Legend iconType="circle" onClick={(e) => handleLegendClick(e.dataKey)} cursor="pointer" />
-                            {/* Corrected Bar Logic: Removed stackId for INCOME to allow side-by-side comparison */}
                             <Bar dataKey="INCOME" name="Total Income" fill="#10b981" radius={[4, 4, 0, 0]} barSize={12} hide={!visibleBars.INCOME} />
-                            <Bar dataKey="SHARED" name="Shared Exp" stackId="expenses" fill="#a855f7" radius={[0, 0, 0, 0]} hide={!visibleBars.SHARED} />
-                            <Bar dataKey="USER_1" name={`${users.user_1.name} Exp`} stackId="expenses" fill="#3b82f6" radius={[0, 0, 0, 0]} hide={!visibleBars.USER_1} />
-                            <Bar dataKey="USER_2" name={`${users.user_2.name} Exp`} stackId="expenses" fill="#ec4899" radius={[4, 4, 0, 0]} hide={!visibleBars.USER_2} />
+                            {/* Removed stackId for expense bars to prevent overlapping with income if needed, or keep stackId="exp" to stack them together separate from income */}
+                            <Bar dataKey="SHARED" name="Shared Exp" stackId="exp" fill="#a855f7" radius={[0, 0, 0, 0]} hide={!visibleBars.SHARED} />
+                            <Bar dataKey="USER_1" name={`${users.user_1.name} Exp`} stackId="exp" fill="#3b82f6" radius={[0, 0, 0, 0]} hide={!visibleBars.USER_1} />
+                            <Bar dataKey="USER_2" name={`${users.user_2.name} Exp`} stackId="exp" fill="#ec4899" radius={[4, 4, 0, 0]} hide={!visibleBars.USER_2} />
                         </BarChart>
                     </ResponsiveContainer>
                 </div>
@@ -290,19 +247,19 @@ export const DashboardCharts: React.FC<DashboardChartsProps> = ({ entries, categ
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
              <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
-                 <div className="flex justify-between items-center mb-6">
+                 <div className="flex justify-between items-center mb-4">
                     <h3 className="font-bold text-slate-800">Where does the money go?</h3>
                  </div>
-                 <div className="flex flex-col sm:flex-row items-center gap-6">
-                     <div className="h-48 w-48 relative shrink-0">
+                 <div className="flex flex-col sm:flex-row items-center gap-6 h-64"> 
+                     <div className="h-full w-48 relative shrink-0">
                          <ResponsiveContainer width="100%" height="100%">
                             <PieChart>
                                 <Pie 
                                     data={pieData} 
                                     cx="50%" 
                                     cy="50%" 
-                                    innerRadius={60} // Donut style
-                                    outerRadius={80} 
+                                    innerRadius={50} 
+                                    outerRadius={70} 
                                     paddingAngle={4} 
                                     dataKey="value"
                                     cornerRadius={4}
@@ -315,12 +272,12 @@ export const DashboardCharts: React.FC<DashboardChartsProps> = ({ entries, categ
                             <span className="text-xs text-slate-400 font-medium uppercase tracking-widest">Top 10</span>
                          </div>
                      </div>
-                     <div className="flex-1 w-full space-y-3">
+                     <div className="flex-1 w-full space-y-2 overflow-y-auto max-h-full pr-2 custom-scrollbar">
                          {pieData.map((entry, index) => (
                              <div key={index} className="flex justify-between items-center text-xs">
                                  <div className="flex items-center gap-2">
                                      <div className="w-2 h-2 rounded-full" style={{ backgroundColor: COLORS[index % COLORS.length] }}></div>
-                                     <span className="text-slate-600 truncate max-w-[140px] font-medium">{entry.name}</span>
+                                     <span className="text-slate-600 truncate max-w-[120px] font-medium">{entry.name}</span>
                                  </div>
                                  <span className="font-bold text-slate-800">{formatCurrency(entry.value, currency)}</span>
                              </div>
@@ -396,7 +353,7 @@ export const DashboardCharts: React.FC<DashboardChartsProps> = ({ entries, categ
                                              <div className="text-xs font-bold text-slate-300 w-4">#{idx+1}</div>
                                              <div>
                                                  <span className="block text-sm font-semibold text-slate-700">
-                                                     {group.catName} {count > 1 && <span className="text-xs font-normal text-slate-400 ml-1">(x{count})</span>}
+                                                     {group.name} {count > 1 && <span className="text-xs font-normal text-slate-400 ml-1">(x{count})</span>}
                                                  </span>
                                                  <div className="flex items-center mt-0.5">
                                                      {renderAccountLabel(group.account)}

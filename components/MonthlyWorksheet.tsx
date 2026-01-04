@@ -35,10 +35,10 @@ const MoneyInput = ({ value, onChange, colorBase, currency, readOnly = false }: 
   };
 
   const colorClasses = {
-    purple: value > 0 ? 'bg-purple-50 border-purple-200 text-purple-700 font-medium' : 'bg-white border-slate-200 text-slate-600',
-    blue: value > 0 ? 'bg-blue-50 border-blue-200 text-blue-700 font-medium' : 'bg-white border-slate-200 text-slate-600',
-    pink: value > 0 ? 'bg-pink-50 border-pink-200 text-pink-700 font-medium' : 'bg-white border-slate-200 text-slate-600',
-    emerald: value > 0 ? 'bg-emerald-50 border-emerald-200 text-emerald-700 font-medium' : 'bg-white border-slate-200 text-slate-600',
+    purple: value > 0 ? 'bg-purple-50 border-purple-300 text-purple-800 font-bold' : 'bg-white border-slate-300 text-slate-700',
+    blue: value > 0 ? 'bg-blue-50 border-blue-300 text-blue-800 font-bold' : 'bg-white border-slate-300 text-slate-700',
+    pink: value > 0 ? 'bg-pink-50 border-pink-300 text-pink-800 font-bold' : 'bg-white border-slate-300 text-slate-700',
+    emerald: value > 0 ? 'bg-emerald-50 border-emerald-300 text-emerald-800 font-bold' : 'bg-white border-slate-300 text-slate-700',
   };
 
   const symbol = currency === 'EUR' ? '€' : currency === 'GBP' ? '£' : currency === 'JPY' ? '¥' : currency === 'BRL' ? 'R$' : '$';

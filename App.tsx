@@ -49,7 +49,7 @@ function App({ instanceId, onExit }: AppProps) {
   // Navigation State
   const [activeMainTab, setActiveMainTab] = useState<MainTab>('insights');
   const [activeInsightsView, setActiveInsightsView] = useState<InsightsView>('global');
-  const [activeRegisterView, setActiveRegisterView] = useState<RegisterView>('worksheet');
+  const [activeRegisterView, setActiveRegisterView] = useState<RegisterView>('single');
   const [activePlanningView, setActivePlanningView] = useState<PlanningView>('budget');
   
   const [dashboardRange, setDashboardRange] = useState<TimeRange>('THIS_YEAR');
@@ -257,8 +257,8 @@ function App({ instanceId, onExit }: AppProps) {
                        </button>
                        {registerMenuOpen && (
                            <div className={`absolute top-full left-0 mt-2 w-48 rounded-xl border shadow-xl p-1 z-50 ${dropdownClass}`}>
-                               <button onClick={() => { setActiveMainTab('register'); setActiveRegisterView('worksheet'); setRegisterMenuOpen(false); }} className="w-full text-left px-3 py-2 rounded-lg text-sm hover:bg-black/5 flex items-center gap-2"><Grid size={16}/> Form Worksheet</button>
-                               <button onClick={() => { setActiveMainTab('register'); setActiveRegisterView('single'); setRegisterMenuOpen(false); }} className="w-full text-left px-3 py-2 rounded-lg text-sm hover:bg-black/5 flex items-center gap-2"><List size={16}/> Single Entry</button>
+                               <button onClick={() => { setActiveMainTab('register'); setActiveRegisterView('single'); setRegisterMenuOpen(false); }} className="w-full text-left px-3 py-2 rounded-lg text-sm hover:bg-black/5 flex items-center gap-2"><List size={16}/> Single Expense</button>
+                               <button onClick={() => { setActiveMainTab('register'); setActiveRegisterView('worksheet'); setRegisterMenuOpen(false); }} className="w-full text-left px-3 py-2 rounded-lg text-sm hover:bg-black/5 flex items-center gap-2"><Grid size={16}/> Expenses Form</button>
                                <button onClick={() => { setActiveMainTab('register'); setActiveRegisterView('income'); setRegisterMenuOpen(false); }} className="w-full text-left px-3 py-2 rounded-lg text-sm hover:bg-black/5 flex items-center gap-2"><ArrowUpRight size={16}/> Income</button>
                            </div>
                        )}
@@ -345,8 +345,8 @@ function App({ instanceId, onExit }: AppProps) {
               <div className="space-y-6">
                   {/* Register Sub-Nav (Visible on Mobile/Tablet if not using dropdown, but here we use state) */}
                   <div className="flex md:hidden justify-center bg-white/5 p-1 rounded-xl gap-2 mb-4">
-                      <button onClick={() => setActiveRegisterView('worksheet')} className={`flex-1 py-2 text-xs font-bold rounded-lg ${activeRegisterView === 'worksheet' ? 'bg-indigo-600 text-white' : 'text-slate-500'}`}>Form</button>
                       <button onClick={() => setActiveRegisterView('single')} className={`flex-1 py-2 text-xs font-bold rounded-lg ${activeRegisterView === 'single' ? 'bg-indigo-600 text-white' : 'text-slate-500'}`}>Single</button>
+                      <button onClick={() => setActiveRegisterView('worksheet')} className={`flex-1 py-2 text-xs font-bold rounded-lg ${activeRegisterView === 'worksheet' ? 'bg-indigo-600 text-white' : 'text-slate-500'}`}>Form</button>
                       <button onClick={() => setActiveRegisterView('income')} className={`flex-1 py-2 text-xs font-bold rounded-lg ${activeRegisterView === 'income' ? 'bg-indigo-600 text-white' : 'text-slate-500'}`}>Income</button>
                   </div>
 

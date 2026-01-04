@@ -99,10 +99,10 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ users, currency, the
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
             {/* User 1 Card */}
-            <div className="bg-white p-6 rounded-xl border border-blue-100 shadow-sm relative overflow-hidden">
-                <div className="absolute top-0 left-0 w-full h-1 bg-blue-500"></div>
+            <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm relative overflow-hidden">
+                <div className="absolute top-0 left-0 w-full h-1" style={{ backgroundColor: localUsers.user_1.color }}></div>
                 <h3 className="font-bold text-slate-800 mb-6 flex items-center gap-2">
-                    <UserIcon size={18} className="text-blue-500"/> Partner 1 (User 1)
+                    <UserIcon size={18} style={{ color: localUsers.user_1.color }}/> Partner 1
                 </h3>
                 
                 <div className="space-y-4">
@@ -119,31 +119,34 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ users, currency, the
                         </div>
                     </div>
                     <div>
-                        <label className="block text-sm font-medium text-slate-700 mb-1">Display Name</label>
+                        <label className="block text-sm font-medium text-slate-700 mb-1">Name</label>
                         <input 
                             type="text" 
                             value={localUsers.user_1.name}
                             onChange={(e) => handleChange('user_1', 'name', e.target.value)}
-                            className="w-full border border-slate-300 rounded-lg p-2.5 focus:ring-2 focus:ring-blue-100 outline-none"
+                            className="w-full border border-slate-300 rounded-lg p-2.5 focus:ring-2 focus:ring-indigo-100 outline-none"
                         />
                     </div>
                     <div>
-                        <label className="block text-sm font-medium text-slate-700 mb-1">Default Base Income</label>
-                        <input 
-                            type="number" 
-                            value={localUsers.user_1.monthlyIncome}
-                            onChange={(e) => handleChange('user_1', 'monthlyIncome', parseFloat(e.target.value))}
-                            className="w-full border border-slate-300 rounded-lg p-2.5 focus:ring-2 focus:ring-blue-100 outline-none"
-                        />
+                        <label className="block text-sm font-medium text-slate-700 mb-1">Theme Color</label>
+                        <div className="flex items-center gap-3">
+                            <input 
+                                type="color" 
+                                value={localUsers.user_1.color}
+                                onChange={(e) => handleChange('user_1', 'color', e.target.value)}
+                                className="h-10 w-20 p-1 border border-slate-300 rounded cursor-pointer"
+                            />
+                            <span className="text-xs text-slate-500">{localUsers.user_1.color}</span>
+                        </div>
                     </div>
                 </div>
             </div>
 
             {/* User 2 Card */}
-            <div className="bg-white p-6 rounded-xl border border-pink-100 shadow-sm relative overflow-hidden">
-                <div className="absolute top-0 left-0 w-full h-1 bg-pink-500"></div>
+            <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm relative overflow-hidden">
+                <div className="absolute top-0 left-0 w-full h-1" style={{ backgroundColor: localUsers.user_2.color }}></div>
                 <h3 className="font-bold text-slate-800 mb-6 flex items-center gap-2">
-                    <UserIcon size={18} className="text-pink-500"/> Partner 2 (User 2)
+                    <UserIcon size={18} style={{ color: localUsers.user_2.color }}/> Partner 2
                 </h3>
                 
                 <div className="space-y-4">
@@ -160,22 +163,25 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ users, currency, the
                         </div>
                     </div>
                     <div>
-                        <label className="block text-sm font-medium text-slate-700 mb-1">Display Name</label>
+                        <label className="block text-sm font-medium text-slate-700 mb-1">Name</label>
                         <input 
                             type="text" 
                             value={localUsers.user_2.name}
                             onChange={(e) => handleChange('user_2', 'name', e.target.value)}
-                            className="w-full border border-slate-300 rounded-lg p-2.5 focus:ring-2 focus:ring-pink-100 outline-none"
+                            className="w-full border border-slate-300 rounded-lg p-2.5 focus:ring-2 focus:ring-indigo-100 outline-none"
                         />
                     </div>
                     <div>
-                        <label className="block text-sm font-medium text-slate-700 mb-1">Default Base Income</label>
-                        <input 
-                            type="number" 
-                            value={localUsers.user_2.monthlyIncome}
-                            onChange={(e) => handleChange('user_2', 'monthlyIncome', parseFloat(e.target.value))}
-                            className="w-full border border-slate-300 rounded-lg p-2.5 focus:ring-2 focus:ring-pink-100 outline-none"
-                        />
+                        <label className="block text-sm font-medium text-slate-700 mb-1">Theme Color</label>
+                        <div className="flex items-center gap-3">
+                            <input 
+                                type="color" 
+                                value={localUsers.user_2.color}
+                                onChange={(e) => handleChange('user_2', 'color', e.target.value)}
+                                className="h-10 w-20 p-1 border border-slate-300 rounded cursor-pointer"
+                            />
+                            <span className="text-xs text-slate-500">{localUsers.user_2.color}</span>
+                        </div>
                     </div>
                 </div>
             </div>
