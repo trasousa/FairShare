@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { 
   BarChart, 
   Bar, 
@@ -16,6 +16,7 @@ import {
 } from 'recharts';
 import { ExpenseEntry, Category, AccountType, IncomeEntry, User, CurrencyCode } from '../types';
 import { formatCurrency } from '../services/financeService';
+import { ChevronDown, ChevronUp } from 'lucide-react';
 
 interface DashboardChartsProps {
   entries: ExpenseEntry[];
@@ -26,6 +27,8 @@ interface DashboardChartsProps {
 }
 
 export const DashboardCharts: React.FC<DashboardChartsProps> = ({ entries, categories, incomes, users, currency }) => {
+  const [expandedGroupId, setExpandedGroupId] = useState<string | null>(null);
+
   const monthMap = new Map<string, { month: string, SHARED: number, USER_1: number, USER_2: number, INCOME: number, SAVINGS: number }>();
   
   incomes.forEach(inc => {
@@ -42,6 +45,7 @@ export const DashboardCharts: React.FC<DashboardChartsProps> = ({ entries, categ
       }
       const data = monthMap.get(entry.monthId)!;
       const cat = categories.find(c => c.id === entry.categoryId);
+      // Ensure SAVINGS includes investments if they are mapped to savings group
       if (cat?.group === 'SAVINGS') {
           data.SAVINGS += entry.amount;
       } else {
@@ -77,13 +81,31 @@ export const DashboardCharts: React.FC<DashboardChartsProps> = ({ entries, categ
 
   const COLORS = ['#6366f1', '#ec4899', '#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4', '#f97316', '#84cc16'];
 
-  const topTransactions = [...entries]
-    .filter(e => {
-         const cat = categories.find(c => c.id === e.categoryId);
-         return cat?.group !== 'SAVINGS';
-    })
-    .sort((a, b) => b.amount - a.amount)
-    .slice(0, 10);
+  // Group transactions logic
+  const groupedTransactions = React.useMemo(() => {
+      const groups = new Map<string, { key: string, categoryId: string, amount: number, entries: ExpenseEntry[] }>();
+      
+      entries.forEach(e => {
+          const cat = categories.find(c => c.id === e.categoryId);
+          if (!cat || cat.group === 'SAVINGS') return; // Skip savings in expense list
+
+          const key = `${e.categoryId}-${e.amount}`;
+          if (!groups.has(key)) {
+              groups.set(key, { key, categoryId: e.categoryId, amount: e.amount, entries: [] });
+          }
+          groups.get(key)!.entries.push(e);
+      });
+
+      return Array.from(groups.values())
+          .sort((a, b) => (b.amount * b.entries.length) - (a.amount * a.entries.length)) // Sort by total impact? Or single amount? User wanted "biggest expenses".
+          // If I have 12 rents of 1000 (12000 total) and 1 car of 5000. Rent is bigger impact.
+          // Let's sort by *Total Group Amount* to reflect true "weight".
+          .slice(0, 10);
+  }, [entries, categories]);
+
+  const toggleGroup = (key: string) => {
+      setExpandedGroupId(prev => prev === key ? null : key);
+  };
 
   return (
     <div className="space-y-6">
@@ -185,18 +207,52 @@ export const DashboardCharts: React.FC<DashboardChartsProps> = ({ entries, categ
              <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
                  <h3 className="font-bold text-slate-800 mb-6">Biggest Expenses (All Time)</h3>
                  <div className="space-y-4">
-                     {topTransactions.map((t, idx) => {
-                         const cat = categories.find(c => c.id === t.categoryId);
+                     {groupedTransactions.map((group, idx) => {
+                         const cat = categories.find(c => c.id === group.categoryId);
+                         const isExpanded = expandedGroupId === group.key;
+                         const count = group.entries.length;
+
                          return (
-                             <div key={t.id} className="flex items-center justify-between border-b border-slate-50 pb-2 last:border-0 last:pb-0">
-                                 <div className="flex items-center gap-3">
-                                     <div className="text-xs font-bold text-slate-300 w-4">#{idx+1}</div>
-                                     <div>
-                                         <span className="block text-sm font-semibold text-slate-700">{cat?.name}</span>
-                                         <span className="text-xs text-slate-400">{t.description || 'No description'} • {t.monthId}</span>
+                             <div key={group.key} className="border-b border-slate-50 last:border-0">
+                                 <div 
+                                    onClick={() => count > 1 && toggleGroup(group.key)}
+                                    className={`flex items-center justify-between py-2 cursor-pointer ${count > 1 ? 'hover:bg-slate-50 rounded-lg px-2 -mx-2 transition' : ''}`}
+                                 >
+                                     <div className="flex items-center gap-3">
+                                         <div className="text-xs font-bold text-slate-300 w-4">#{idx+1}</div>
+                                         <div className="flex items-center gap-2">
+                                             <div>
+                                                 <span className="block text-sm font-semibold text-slate-700">
+                                                     {cat?.name} {count > 1 && <span className="text-xs font-normal text-slate-400 ml-1">(x{count})</span>}
+                                                 </span>
+                                                 {count === 1 && (
+                                                     <span className="text-xs text-slate-400">{group.entries[0].description || 'No description'} • {group.entries[0].monthId}</span>
+                                                 )}
+                                             </div>
+                                             {count > 1 && (
+                                                 <div className="text-slate-400">
+                                                     {isExpanded ? <ChevronUp size={14}/> : <ChevronDown size={14}/>}
+                                                 </div>
+                                             )}
+                                         </div>
                                      </div>
+                                     <span className="font-bold text-slate-800">{formatCurrency(group.amount, currency)}</span>
                                  </div>
-                                 <span className="font-bold text-slate-800">{formatCurrency(t.amount, currency)}</span>
+                                 
+                                 {isExpanded && (
+                                     <div className="bg-slate-50 rounded-lg p-3 mb-3 ml-8 text-xs space-y-2 animate-in fade-in slide-in-from-top-1">
+                                         {group.entries.map((e, subIdx) => (
+                                             <div key={e.id} className="flex justify-between text-slate-500">
+                                                 <span>{e.monthId} • {e.description || 'Regular entry'}</span>
+                                                 <span className="font-medium">{formatCurrency(e.amount, currency)}</span>
+                                             </div>
+                                         ))}
+                                         <div className="border-t border-slate-200 pt-2 flex justify-between font-bold text-slate-700">
+                                             <span>Total Group</span>
+                                             <span>{formatCurrency(group.amount * count, currency)}</span>
+                                         </div>
+                                     </div>
+                                 )}
                              </div>
                          );
                      })}
