@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { User, UserId, CurrencyCode } from '../types';
-import { Save, User as UserIcon, Upload, RotateCcw, Download, Database, Sun, Moon } from 'lucide-react';
+import { Save, User as UserIcon, Upload, RotateCcw, Download, Database, Sun, Moon, LogOut } from 'lucide-react';
 
 interface SettingsPageProps {
   users: Record<string, User>;
@@ -10,9 +10,10 @@ interface SettingsPageProps {
   onUpdateCurrency: (c: CurrencyCode) => void;
   onUpdateTheme: (t: 'light' | 'dark') => void;
   onExport: () => void;
+  onExit: () => void;
 }
 
-export const SettingsPage: React.FC<SettingsPageProps> = ({ users, currency, theme = 'light', onUpdateUser, onUpdateCurrency, onUpdateTheme, onExport }) => {
+export const SettingsPage: React.FC<SettingsPageProps> = ({ users, currency, theme = 'light', onUpdateUser, onUpdateCurrency, onUpdateTheme, onExport, onExit }) => {
   const [localUsers, setLocalUsers] = useState(users);
   const [successMsg, setSuccessMsg] = useState('');
 
@@ -180,12 +181,19 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ users, currency, the
             </div>
         </div>
 
-        <div className="flex items-center gap-4 border-t border-slate-200 pt-6">
+        <div className="flex items-center justify-between border-t border-slate-200 pt-6">
             <button 
                 onClick={handleSave}
                 className="flex items-center gap-2 bg-slate-900 text-white px-6 py-3 rounded-xl font-bold hover:bg-slate-800 transition shadow-lg shadow-slate-900/20"
             >
                 <Save size={18} /> Save Changes
+            </button>
+
+            <button 
+                onClick={onExit}
+                className="flex items-center gap-2 border border-red-200 text-red-600 px-6 py-3 rounded-xl font-bold hover:bg-red-50 transition"
+            >
+                <LogOut size={18} /> Exit Instance
             </button>
         </div>
     </div>

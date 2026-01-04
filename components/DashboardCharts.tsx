@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { 
   BarChart, 
   Bar, 
@@ -16,7 +16,7 @@ import {
 } from 'recharts';
 import { ExpenseEntry, Category, AccountType, IncomeEntry, User, CurrencyCode } from '../types';
 import { formatCurrency } from '../services/financeService';
-import { ChevronDown, ChevronUp } from 'lucide-react';
+import { ChevronDown, ChevronUp, Wallet, User as UserIcon, Users } from 'lucide-react';
 
 interface DashboardChartsProps {
   entries: ExpenseEntry[];
@@ -28,24 +28,30 @@ interface DashboardChartsProps {
 
 export const DashboardCharts: React.FC<DashboardChartsProps> = ({ entries, categories, incomes, users, currency }) => {
   const [expandedGroupId, setExpandedGroupId] = useState<string | null>(null);
+  const [visibleBars, setVisibleBars] = useState<Record<string, boolean>>({
+      INCOME: true,
+      SHARED: true,
+      USER_1: true,
+      USER_2: true
+  });
 
+  // --- Data Processing for Charts ---
   const monthMap = new Map<string, { month: string, SHARED: number, USER_1: number, USER_2: number, INCOME: number, SAVINGS: number }>();
   
+  // Initialize map with all relevant months from both incomes and entries to ensure full x-axis
+  const allMonths = new Set([...incomes.map(i => i.monthId), ...entries.map(e => e.monthId)]);
+  allMonths.forEach(m => {
+      monthMap.set(m, { month: m, SHARED: 0, USER_1: 0, USER_2: 0, INCOME: 0, SAVINGS: 0 });
+  });
+
   incomes.forEach(inc => {
-      if (!monthMap.has(inc.monthId)) {
-          monthMap.set(inc.monthId, { month: inc.monthId, SHARED: 0, USER_1: 0, USER_2: 0, INCOME: 0, SAVINGS: 0 });
-      }
       const data = monthMap.get(inc.monthId)!;
       data.INCOME += inc.amount;
   });
 
   entries.forEach(entry => {
-      if (!monthMap.has(entry.monthId)) {
-          monthMap.set(entry.monthId, { month: entry.monthId, SHARED: 0, USER_1: 0, USER_2: 0, INCOME: 0, SAVINGS: 0 });
-      }
       const data = monthMap.get(entry.monthId)!;
       const cat = categories.find(c => c.id === entry.categoryId);
-      // Ensure SAVINGS includes investments if they are mapped to savings group
       if (cat?.group === 'SAVINGS') {
           data.SAVINGS += entry.amount;
       } else {
@@ -81,35 +87,135 @@ export const DashboardCharts: React.FC<DashboardChartsProps> = ({ entries, categ
 
   const COLORS = ['#6366f1', '#ec4899', '#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4', '#f97316', '#84cc16'];
 
-  // Group transactions logic
-  const groupedTransactions = React.useMemo(() => {
-      const groups = new Map<string, { key: string, categoryId: string, amount: number, entries: ExpenseEntry[] }>();
-      
+  // --- Totals for Summary Cards ---
+  const totals = useMemo(() => {
+      const t = { SHARED: 0, USER_1: 0, USER_2: 0 };
       entries.forEach(e => {
           const cat = categories.find(c => c.id === e.categoryId);
-          if (!cat || cat.group === 'SAVINGS') return; // Skip savings in expense list
-
-          const key = `${e.categoryId}-${e.amount}`;
-          if (!groups.has(key)) {
-              groups.set(key, { key, categoryId: e.categoryId, amount: e.amount, entries: [] });
+          if (cat?.group !== 'SAVINGS') {
+              t[e.account] += e.amount;
           }
-          groups.get(key)!.entries.push(e);
       });
-
-      return Array.from(groups.values())
-          .sort((a, b) => (b.amount * b.entries.length) - (a.amount * a.entries.length)) // Sort by total impact? Or single amount? User wanted "biggest expenses".
-          // If I have 12 rents of 1000 (12000 total) and 1 car of 5000. Rent is bigger impact.
-          // Let's sort by *Total Group Amount* to reflect true "weight".
-          .slice(0, 10);
+      return t;
   }, [entries, categories]);
+
+  // --- Grouping Logic for "Biggest Expenses" ---
+  
+  // 1. Fixed Expenses (Grouped by Category Name)
+  const fixedExpenses = useMemo(() => {
+      const fixedMap = new Map<string, { name: string, amount: number, account: AccountType, count: number }>();
+      entries.forEach(e => {
+          const cat = categories.find(c => c.id === e.categoryId);
+          if (cat?.group === 'FIXED') {
+              const key = cat.name;
+              if (!fixedMap.has(key)) {
+                  fixedMap.set(key, { name: key, amount: 0, account: e.account, count: 0 });
+              }
+              const item = fixedMap.get(key)!;
+              item.amount += e.amount;
+              item.count += 1;
+          }
+      });
+      return Array.from(fixedMap.values()).sort((a, b) => b.amount - a.amount);
+  }, [entries, categories]);
+
+  // 2. Variable Expenses (Grouped by Consecutive Identical Transactions)
+  const variableExpenses = useMemo(() => {
+      const variableEntries = entries
+        .filter(e => {
+            const cat = categories.find(c => c.id === e.categoryId);
+            return cat?.group !== 'FIXED' && cat?.group !== 'SAVINGS';
+        })
+        .sort((a, b) => b.monthId.localeCompare(a.monthId)); // Sort by date desc (approx via monthId)
+
+      const groups: { key: string, catName: string, amount: number, total: number, entries: ExpenseEntry[], account: AccountType }[] = [];
+      
+      if (variableEntries.length === 0) return [];
+
+      let currentGroup = {
+          key: variableEntries[0].id,
+          catName: categories.find(c => c.id === variableEntries[0].categoryId)?.name || 'Unknown',
+          amount: variableEntries[0].amount,
+          total: variableEntries[0].amount,
+          entries: [variableEntries[0]],
+          account: variableEntries[0].account
+      };
+
+      for (let i = 1; i < variableEntries.length; i++) {
+          const e = variableEntries[i];
+          const catName = categories.find(c => c.id === e.categoryId)?.name || 'Unknown';
+          
+          // Check if consecutive and identical (same category, same amount, same account)
+          // We rely on the sorted order for "consecutive"
+          if (catName === currentGroup.catName && Math.abs(e.amount - currentGroup.amount) < 0.01 && e.account === currentGroup.account) {
+              currentGroup.entries.push(e);
+              currentGroup.total += e.amount;
+          } else {
+              groups.push(currentGroup);
+              currentGroup = {
+                  key: e.id,
+                  catName,
+                  amount: e.amount,
+                  total: e.amount,
+                  entries: [e],
+                  account: e.account
+              };
+          }
+      }
+      groups.push(currentGroup);
+
+      return groups.sort((a, b) => b.total - a.total).slice(0, 10);
+  }, [entries, categories]);
+
 
   const toggleGroup = (key: string) => {
       setExpandedGroupId(prev => prev === key ? null : key);
   };
 
+  const handleLegendClick = (dataKey: any) => {
+      setVisibleBars(prev => ({ ...prev, [dataKey]: !prev[dataKey] }));
+  };
+
+  const renderAccountLabel = (account: AccountType) => {
+      const label = account === 'SHARED' ? 'Shared' : account === 'USER_1' ? users.user_1.name : users.user_2.name;
+      const bg = account === 'SHARED' ? 'bg-purple-100 text-purple-700' : account === 'USER_1' ? 'bg-blue-100 text-blue-700' : 'bg-pink-100 text-pink-700';
+      return <span className={`text-[10px] px-1.5 py-0.5 rounded font-bold ml-2 ${bg}`}>{label}</span>;
+  };
+
   return (
     <div className="space-y-6">
         
+        {/* Expense Summary Cards */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex items-center justify-between">
+                <div>
+                    <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Total Shared</p>
+                    <p className="text-xl font-bold text-slate-800">{formatCurrency(totals.SHARED, currency)}</p>
+                </div>
+                <div className="w-10 h-10 rounded-full bg-purple-100 flex items-center justify-center text-purple-600">
+                    <Users size={20} />
+                </div>
+            </div>
+            <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex items-center justify-between">
+                <div>
+                    <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Total {users.user_1.name}</p>
+                    <p className="text-xl font-bold text-slate-800">{formatCurrency(totals.USER_1, currency)}</p>
+                </div>
+                <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center text-blue-600">
+                    <UserIcon size={20} />
+                </div>
+            </div>
+            <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex items-center justify-between">
+                <div>
+                    <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Total {users.user_2.name}</p>
+                    <p className="text-xl font-bold text-slate-800">{formatCurrency(totals.USER_2, currency)}</p>
+                </div>
+                <div className="w-10 h-10 rounded-full bg-pink-100 flex items-center justify-center text-pink-600">
+                    <UserIcon size={20} />
+                </div>
+            </div>
+        </div>
+
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             <div className="lg:col-span-2 bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
                 <h3 className="text-lg font-bold text-slate-800 mb-6">Income vs Expenses Trend</h3>
@@ -137,11 +243,11 @@ export const DashboardCharts: React.FC<DashboardChartsProps> = ({ entries, categ
                                 contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
                                 cursor={{fill: '#f8fafc'}}
                             />
-                            <Legend iconType="circle" />
-                            <Bar dataKey="INCOME" name="Total Income" fill="#10b981" radius={[4, 4, 0, 0]} barSize={8} />
-                            <Bar dataKey="SHARED" name="Shared Exp" stackId="a" fill="#a855f7" radius={[0, 0, 0, 0]} />
-                            <Bar dataKey="USER_1" name={`${users.user_1.name} Exp`} stackId="a" fill="#3b82f6" radius={[0, 0, 0, 0]} />
-                            <Bar dataKey="USER_2" name={`${users.user_2.name} Exp`} stackId="a" fill="#ec4899" radius={[4, 4, 0, 0]} />
+                            <Legend iconType="circle" onClick={(e) => handleLegendClick(e.dataKey)} cursor="pointer" />
+                            <Bar dataKey="INCOME" name="Total Income" fill="#10b981" radius={[4, 4, 0, 0]} barSize={8} hide={!visibleBars.INCOME} />
+                            <Bar dataKey="SHARED" name="Shared Exp" stackId="a" fill="#a855f7" radius={[0, 0, 0, 0]} hide={!visibleBars.SHARED} />
+                            <Bar dataKey="USER_1" name={`${users.user_1.name} Exp`} stackId="a" fill="#3b82f6" radius={[0, 0, 0, 0]} hide={!visibleBars.USER_1} />
+                            <Bar dataKey="USER_2" name={`${users.user_2.name} Exp`} stackId="a" fill="#ec4899" radius={[4, 4, 0, 0]} hide={!visibleBars.USER_2} />
                         </BarChart>
                     </ResponsiveContainer>
                 </div>
@@ -204,58 +310,81 @@ export const DashboardCharts: React.FC<DashboardChartsProps> = ({ entries, categ
                  </div>
              </div>
 
-             <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
-                 <h3 className="font-bold text-slate-800 mb-6">Biggest Expenses (All Time)</h3>
-                 <div className="space-y-4">
-                     {groupedTransactions.map((group, idx) => {
-                         const cat = categories.find(c => c.id === group.categoryId);
-                         const isExpanded = expandedGroupId === group.key;
-                         const count = group.entries.length;
+             <div className="space-y-6">
+                 {/* Fixed Expenses Card */}
+                 <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
+                     <h3 className="font-bold text-slate-800 mb-4 flex items-center gap-2">
+                         <Wallet size={18} className="text-slate-400"/> Fixed & Recurring
+                     </h3>
+                     <div className="space-y-3 max-h-[300px] overflow-y-auto pr-2">
+                         {fixedExpenses.map((group, idx) => (
+                             <div key={idx} className="flex justify-between items-center text-sm border-b border-slate-50 pb-2 last:border-0">
+                                 <div>
+                                     <span className="font-semibold text-slate-700">{group.name}</span>
+                                     <div className="flex items-center gap-2 text-xs text-slate-400">
+                                         {group.count} transactions {renderAccountLabel(group.account)}
+                                     </div>
+                                 </div>
+                                 <span className="font-bold text-slate-800">{formatCurrency(group.amount, currency)}</span>
+                             </div>
+                         ))}
+                         {fixedExpenses.length === 0 && <p className="text-xs text-slate-400">No fixed expenses found.</p>}
+                     </div>
+                 </div>
 
-                         return (
-                             <div key={group.key} className="border-b border-slate-50 last:border-0">
-                                 <div 
-                                    onClick={() => count > 1 && toggleGroup(group.key)}
-                                    className={`flex items-center justify-between py-2 cursor-pointer ${count > 1 ? 'hover:bg-slate-50 rounded-lg px-2 -mx-2 transition' : ''}`}
-                                 >
-                                     <div className="flex items-center gap-3">
-                                         <div className="text-xs font-bold text-slate-300 w-4">#{idx+1}</div>
-                                         <div className="flex items-center gap-2">
+                 {/* Variable Expenses Card */}
+                 <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
+                     <h3 className="font-bold text-slate-800 mb-4 flex items-center gap-2">
+                         <ChevronUp size={18} className="text-slate-400"/> Top Variable Spending
+                     </h3>
+                     <div className="space-y-3 max-h-[400px] overflow-y-auto pr-2">
+                         {variableExpenses.map((group, idx) => {
+                             const isExpanded = expandedGroupId === group.key;
+                             const count = group.entries.length;
+
+                             return (
+                                 <div key={group.key} className="border-b border-slate-50 last:border-0">
+                                     <div 
+                                        onClick={() => count > 1 && toggleGroup(group.key)}
+                                        className={`flex items-center justify-between py-2 cursor-pointer ${count > 1 ? 'hover:bg-slate-50 rounded-lg px-2 -mx-2 transition' : ''}`}
+                                     >
+                                         <div className="flex items-center gap-3">
+                                             <div className="text-xs font-bold text-slate-300 w-4">#{idx+1}</div>
                                              <div>
                                                  <span className="block text-sm font-semibold text-slate-700">
-                                                     {cat?.name} {count > 1 && <span className="text-xs font-normal text-slate-400 ml-1">(x{count})</span>}
+                                                     {group.catName} {count > 1 && <span className="text-xs font-normal text-slate-400 ml-1">(x{count})</span>}
                                                  </span>
-                                                 {count === 1 && (
-                                                     <span className="text-xs text-slate-400">{group.entries[0].description || 'No description'} • {group.entries[0].monthId}</span>
-                                                 )}
+                                                 <div className="flex items-center mt-0.5">
+                                                     {renderAccountLabel(group.account)}
+                                                     {count === 1 && <span className="text-xs text-slate-400 ml-2">{group.entries[0].monthId}</span>}
+                                                 </div>
                                              </div>
+                                         </div>
+                                         <div className="text-right">
+                                             <span className="block font-bold text-slate-800">{formatCurrency(group.total, currency)}</span>
                                              {count > 1 && (
-                                                 <div className="text-slate-400">
+                                                 <div className="text-slate-400 flex justify-end mt-1">
                                                      {isExpanded ? <ChevronUp size={14}/> : <ChevronDown size={14}/>}
                                                  </div>
                                              )}
                                          </div>
                                      </div>
-                                     <span className="font-bold text-slate-800">{formatCurrency(group.amount, currency)}</span>
-                                 </div>
-                                 
-                                 {isExpanded && (
-                                     <div className="bg-slate-50 rounded-lg p-3 mb-3 ml-8 text-xs space-y-2 animate-in fade-in slide-in-from-top-1">
-                                         {group.entries.map((e, subIdx) => (
-                                             <div key={e.id} className="flex justify-between text-slate-500">
-                                                 <span>{e.monthId} • {e.description || 'Regular entry'}</span>
-                                                 <span className="font-medium">{formatCurrency(e.amount, currency)}</span>
-                                             </div>
-                                         ))}
-                                         <div className="border-t border-slate-200 pt-2 flex justify-between font-bold text-slate-700">
-                                             <span>Total Group</span>
-                                             <span>{formatCurrency(group.amount * count, currency)}</span>
+                                     
+                                     {isExpanded && (
+                                         <div className="bg-slate-50 rounded-lg p-3 mb-3 ml-8 text-xs space-y-2 animate-in fade-in slide-in-from-top-1">
+                                             {group.entries.map((e, subIdx) => (
+                                                 <div key={e.id} className="flex justify-between text-slate-500">
+                                                     <span>{e.monthId} • {e.description || 'Entry'}</span>
+                                                     <span className="font-medium">{formatCurrency(e.amount, currency)}</span>
+                                                 </div>
+                                             ))}
                                          </div>
-                                     </div>
-                                 )}
-                             </div>
-                         );
-                     })}
+                                     )}
+                                 </div>
+                             );
+                         })}
+                         {variableExpenses.length === 0 && <p className="text-xs text-slate-400">No variable expenses found.</p>}
+                     </div>
                  </div>
              </div>
         </div>
