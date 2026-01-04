@@ -28,6 +28,11 @@ interface DashboardChartsProps {
 
 export const DashboardCharts: React.FC<DashboardChartsProps> = ({ entries, categories, incomes, users, currency }) => {
   const [expandedGroupId, setExpandedGroupId] = useState<string | null>(null);
+  
+  if (!users || !users.user_1 || !users.user_2) {
+      return <div className="p-8 text-center text-slate-400 font-medium">Preparing Dashboard...</div>;
+  }
+
   const [visibleBars, setVisibleBars] = useState<Record<string, boolean>>({
       INCOME: true,
       SHARED: true,

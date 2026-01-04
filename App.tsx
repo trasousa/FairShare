@@ -10,6 +10,8 @@ import {
   CheckCircle2,
   Cloud,
   ChevronDown,
+  ChevronLeft,
+  ChevronRight,
   List,
   Grid,
   Calendar as CalendarIcon
@@ -153,7 +155,8 @@ function App({ instanceId, onExit }: AppProps) {
       setCurrentMonth(newMonth);
   };
 
-  const monthLabel = new Date(currentMonth).toLocaleString('default', { month: 'long', year: 'numeric' });
+  const [yearStr, monthStr] = currentMonth.split('-');
+  const monthLabel = new Date(parseInt(yearStr), parseInt(monthStr) - 1).toLocaleString('default', { month: 'long', year: 'numeric' });
 
   const currentTotalIncome = useMemo(() => {
       if (!users.user_1) return 0;
@@ -206,7 +209,7 @@ function App({ instanceId, onExit }: AppProps) {
   const filteredDashboardEntries = useMemo(() => entries.filter(e => filterByDate(e.monthId)), [entries, dashboardRange]);
   const filteredDashboardIncomes = useMemo(() => incomes.filter(i => filterByDate(i.monthId)), [incomes, dashboardRange]);
 
-  if (loading) return <div className="min-h-screen flex items-center justify-center bg-slate-100 text-slate-400">Loading Database...</div>;
+  if (loading || !users.user_1 || !users.user_2) return <div className="min-h-screen flex items-center justify-center bg-slate-100 text-slate-400">Loading Database...</div>;
 
   const bgClass = theme === 'dark' ? 'bg-slate-950 text-slate-100' : 'bg-slate-100 text-slate-800';
   const navBarClass = theme === 'dark' ? 'bg-slate-900 border-slate-800 text-slate-300' : 'bg-white border-slate-200 text-slate-600';

@@ -16,7 +16,8 @@ interface MonthlyDashboardProps {
 }
 
 export const MonthlyDashboard: React.FC<MonthlyDashboardProps> = ({ entries, budgets, categories, savings, incomes, users, currency, currentMonth }) => {
-  const monthLabel = new Date(currentMonth).toLocaleString('default', { month: 'long', year: 'numeric' });
+  const [yearStr, monthStr] = currentMonth.split('-');
+  const monthLabel = new Date(parseInt(yearStr), parseInt(monthStr) - 1).toLocaleString('default', { month: 'long', year: 'numeric' });
 
   const monthlyEntries = useMemo(() => 
     entries.filter(e => e.monthId === currentMonth), 
