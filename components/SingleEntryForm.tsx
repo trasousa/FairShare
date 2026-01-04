@@ -12,8 +12,6 @@ interface SingleEntryFormProps {
 }
 
 export const SingleEntryForm: React.FC<SingleEntryFormProps> = ({ categories, trips, currentMonth, users, currency, onAddEntry }) => {
-  if (!users.user_1 || !users.user_2) return <div>Loading users...</div>;
-
   const [amount, setAmount] = useState('');
   const [description, setDescription] = useState('');
   const [categoryId, setCategoryId] = useState(categories[0]?.id || '');
@@ -28,6 +26,9 @@ export const SingleEntryForm: React.FC<SingleEntryFormProps> = ({ categories, tr
 
   // Symbol for display
   const symbol = currency === 'EUR' ? '€' : currency === 'GBP' ? '£' : currency === 'JPY' ? '¥' : currency === 'BRL' ? 'R$' : '$';
+
+  // SAFEGUARD: Hooks must run first
+  if (!users || !users.user_1 || !users.user_2) return <div>Loading users...</div>;
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();

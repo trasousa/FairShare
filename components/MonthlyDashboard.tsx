@@ -16,10 +16,6 @@ interface MonthlyDashboardProps {
 }
 
 export const MonthlyDashboard: React.FC<MonthlyDashboardProps> = ({ entries, budgets, categories, savings, incomes, users, currency, currentMonth }) => {
-  if (!users.user_1 || !users.user_2) {
-      return <div className="p-8 text-center text-slate-400">Loading user data...</div>;
-  }
-
   const monthLabel = new Date(currentMonth).toLocaleString('default', { month: 'long', year: 'numeric' });
 
   const monthlyEntries = useMemo(() => 
@@ -28,10 +24,14 @@ export const MonthlyDashboard: React.FC<MonthlyDashboardProps> = ({ entries, bud
 
   const monthlyIncomes = incomes.filter(i => i.monthId === currentMonth);
   
+  // Safe access for user data inside logic
+  const u1Income = users?.user_1?.monthlyIncome || 0;
+  const u2Income = users?.user_2?.monthlyIncome || 0;
+
   const incomeU1 = monthlyIncomes.filter(i => i.recipient === 'USER_1').reduce((sum, i) => sum + i.amount, 0) 
-                 || users.user_1.monthlyIncome; 
+                 || u1Income; 
   const incomeU2 = monthlyIncomes.filter(i => i.recipient === 'USER_2').reduce((sum, i) => sum + i.amount, 0) 
-                 || users.user_2.monthlyIncome; 
+                 || u2Income; 
   const incomeShared = monthlyIncomes.filter(i => i.recipient === 'SHARED').reduce((sum, i) => sum + i.amount, 0);
 
   const totalIncome = incomeU1 + incomeU2 + incomeShared;
@@ -112,6 +112,11 @@ export const MonthlyDashboard: React.FC<MonthlyDashboardProps> = ({ entries, bud
     .filter(item => item.totalSpent > 0)
     .sort((a, b) => b.totalSpent - a.totalSpent);
   }, [categories, monthlyEntries]);
+
+  // SAFEGUARD: Only return UI if users are loaded
+  if (!users || !users.user_1 || !users.user_2) {
+      return <div className="p-8 text-center text-slate-400">Loading user data...</div>;
+  }
 
     return (
     <div className="space-y-8">
