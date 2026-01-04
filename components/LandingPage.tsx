@@ -1,6 +1,7 @@
-import React, { useEffect, useState } from 'react';
-import { getInstances, createDemoInstance, deleteInstance, checkBackendHealth } from '../services/storage';
-import { Plus, Trash2, ArrowRight, Wallet, Layout, AlertTriangle, X, ServerCrash, RefreshCcw } from 'lucide-react';
+import React, { useEffect, useState, useRef } from 'react';
+import { getInstances, createDemoInstance, deleteInstance, saveInstance } from '../services/storage';
+import { Plus, Trash2, ArrowRight, Wallet, Layout, AlertTriangle, Upload, ServerCrash, RefreshCcw, FileJson } from 'lucide-react';
+import { AppInstance } from '../types';
 
 interface LandingPageProps {
   onSelectInstance: (id: string) => void;
@@ -13,6 +14,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onSelectInstance, onCr
   const [deleteCandidate, setDeleteCandidate] = useState<string | null>(null);
   const [backendError, setBackendError] = useState(false);
   const [actionError, setActionError] = useState('');
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     loadInstances();
@@ -42,6 +44,36 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onSelectInstance, onCr
         console.error(e);
         setActionError('Failed to launch demo. Is the backend running?');
     }
+  };
+
+  const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+      const file = event.target.files?.[0];
+      if (!file) return;
+
+      const reader = new FileReader();
+      reader.onload = async (e) => {
+          try {
+              const content = e.target?.result as string;
+              const data = JSON.parse(content) as AppInstance;
+              
+              // Basic validation
+              if (!data.id || !data.users || !data.data) {
+                  throw new Error("Invalid file format");
+              }
+
+              // Ensure ID is unique or allow overwrite? For now, we save as is.
+              // If ID conflicts, it updates. 
+              await saveInstance(data);
+              await loadInstances();
+              setActionError('');
+          } catch (err) {
+              console.error(err);
+              setActionError('Failed to import file. Invalid JSON format.');
+          }
+      };
+      reader.readAsText(file);
+      // Reset input
+      if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
   const confirmDelete = async () => {
@@ -115,12 +147,12 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onSelectInstance, onCr
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                 {/* Instance List */}
-                <div className="bg-white rounded-3xl shadow-lg border border-slate-100 p-8">
+                <div className="bg-white rounded-3xl shadow-lg border border-slate-100 p-8 flex flex-col">
                     <h2 className="text-xl font-bold text-slate-800 mb-6 flex items-center gap-3">
                         <Wallet className="text-indigo-600"/> Your Trackers
                     </h2>
                     
-                    <div className="space-y-4">
+                    <div className="space-y-4 flex-1">
                         {instances.map(inst => (
                             <div 
                                 key={inst.id}
@@ -147,18 +179,18 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onSelectInstance, onCr
                         ))}
                         
                         {instances.length === 0 && (
-                            <div className="text-center py-12 text-slate-500 bg-slate-100/50 rounded-2xl border border-dashed border-slate-200">
-                                No active trackers found.
+                            <div className="text-center py-12 text-slate-500 bg-slate-100/50 rounded-2xl border border-dashed border-slate-200 h-full flex flex-col items-center justify-center">
+                                <p>No active trackers found.</p>
                             </div>
                         )}
                     </div>
                 </div>
 
                 {/* Actions */}
-                <div className="space-y-8">
+                <div className="flex flex-col gap-6">
                     <div 
                         onClick={onCreateNew}
-                        className="bg-white p-8 rounded-3xl shadow-lg border-slate-100 cursor-pointer hover:shadow-xl transition group"
+                        className="bg-white p-8 rounded-3xl shadow-lg border-slate-100 cursor-pointer hover:shadow-xl transition group flex-1"
                     >
                         <div className="w-14 h-14 bg-emerald-100 text-emerald-600 rounded-2xl flex items-center justify-center mb-6 group-hover:bg-emerald-200/80 transition-colors">
                             <Plus size={28} />
@@ -168,16 +200,30 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onSelectInstance, onCr
                     </div>
 
                     <div 
-                        onClick={handleCreateDemo}
-                        className="bg-gradient-to-br from-indigo-600 to-violet-700 p-8 rounded-3xl shadow-lg shadow-indigo-300/80 cursor-pointer hover:shadow-xl transition"
+                        onClick={() => fileInputRef.current?.click()}
+                        className="bg-white p-8 rounded-3xl shadow-lg border-slate-100 cursor-pointer hover:shadow-xl transition group flex-1"
                     >
-                        <div className="relative z-10">
-                            <div className="w-14 h-14 bg-white/20 text-white rounded-2xl flex items-center justify-center mb-6 backdrop-blur-sm border border-white/20">
-                                <Layout size={28} />
-                            </div>
-                            <h3 className="text-2xl font-bold text-white mb-2">Launch Demo</h3>
-                            <p className="text-indigo-100 leading-relaxed">Explore the app with pre-populated data to see the dynamic split logic in action.</p>
+                        <input 
+                            type="file" 
+                            ref={fileInputRef} 
+                            onChange={handleFileUpload} 
+                            accept=".json" 
+                            className="hidden" 
+                        />
+                        <div className="w-14 h-14 bg-blue-100 text-blue-600 rounded-2xl flex items-center justify-center mb-6 group-hover:bg-blue-200/80 transition-colors">
+                            <Upload size={28} />
                         </div>
+                        <h3 className="text-2xl font-bold text-slate-800 mb-2">Upload Backup</h3>
+                        <p className="text-slate-500 leading-relaxed">Restore a tracker from a <code>.json</code> backup file to pick up exactly where you left off.</p>
+                    </div>
+
+                    <div className="text-center mt-2">
+                        <button 
+                            onClick={handleCreateDemo}
+                            className="text-indigo-600 hover:text-indigo-800 text-sm font-semibold flex items-center justify-center gap-2 mx-auto transition opacity-70 hover:opacity-100"
+                        >
+                            <Layout size={16} /> Launch Demo Instance
+                        </button>
                     </div>
                 </div>
             </div>
