@@ -174,10 +174,10 @@ export const BudgetManager: React.FC<BudgetManagerProps> = ({ budgets, categorie
                      <form onSubmit={handleBudgetSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div className="col-span-1 md:col-span-2">
                              <label className="block text-xs font-semibold text-slate-500 mb-1">Account</label>
-                             <div className="flex gap-2">
-                                <button type="button" onClick={() => setSelectedAccount('SHARED')} className={`flex-1 py-2 text-sm rounded-lg border ${selectedAccount === 'SHARED' ? 'bg-purple-50 border-purple-200 text-purple-700 font-bold' : 'border-slate-200 text-slate-600 hover:bg-slate-50'}`}>Shared</button>
-                                <button type="button" onClick={() => setSelectedAccount('USER_1')} className={`flex-1 py-2 text-sm rounded-lg border ${selectedAccount === 'USER_1' ? 'bg-blue-50 border-blue-200 text-blue-700 font-bold' : 'border-slate-200 text-slate-600 hover:bg-slate-50'}`}>{users.user_1.name}</button>
-                                <button type="button" onClick={() => setSelectedAccount('USER_2')} className={`flex-1 py-2 text-sm rounded-lg border ${selectedAccount === 'USER_2' ? 'bg-pink-50 border-pink-200 text-pink-700 font-bold' : 'border-slate-200 text-slate-600 hover:bg-slate-50'}`}>{users.user_2.name}</button>
+                             <div className="grid grid-cols-3 gap-2">
+                                <button type="button" onClick={() => setSelectedAccount('SHARED')} className={`py-2 text-sm rounded-lg border ${selectedAccount === 'SHARED' ? 'bg-purple-50 border-purple-200 text-purple-700 font-bold' : 'border-slate-200 text-slate-600 hover:bg-slate-50'}`}>Shared</button>
+                                <button type="button" onClick={() => setSelectedAccount('USER_1')} className={`py-2 text-sm rounded-lg border ${selectedAccount === 'USER_1' ? 'bg-blue-50 border-blue-200 text-blue-700 font-bold' : 'border-slate-200 text-slate-600 hover:bg-slate-50'}`}>{users.user_1.name}</button>
+                                <button type="button" onClick={() => setSelectedAccount('USER_2')} className={`py-2 text-sm rounded-lg border ${selectedAccount === 'USER_2' ? 'bg-pink-50 border-pink-200 text-pink-700 font-bold' : 'border-slate-200 text-slate-600 hover:bg-slate-50'}`}>{users.user_2.name}</button>
                              </div>
                         </div>
                         <div>
@@ -197,10 +197,10 @@ export const BudgetManager: React.FC<BudgetManagerProps> = ({ budgets, categorie
                      <form onSubmit={handleGoalSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-4">
                          <div className="col-span-1 md:col-span-2">
                              <label className="block text-xs font-semibold text-slate-500 mb-1">Goal Owner</label>
-                             <div className="flex gap-2">
-                                <button type="button" onClick={() => setSelectedAccount('SHARED')} className={`flex-1 py-2 text-sm rounded-lg border ${selectedAccount === 'SHARED' ? 'bg-purple-50 border-purple-200 text-purple-700 font-bold' : 'border-slate-200 text-slate-600 hover:bg-slate-50'}`}>Shared</button>
-                                <button type="button" onClick={() => setSelectedAccount('USER_1')} className={`flex-1 py-2 text-sm rounded-lg border ${selectedAccount === 'USER_1' ? 'bg-blue-50 border-blue-200 text-blue-700 font-bold' : 'border-slate-200 text-slate-600 hover:bg-slate-50'}`}>{users.user_1.name}</button>
-                                <button type="button" onClick={() => setSelectedAccount('USER_2')} className={`flex-1 py-2 text-sm rounded-lg border ${selectedAccount === 'USER_2' ? 'bg-pink-50 border-pink-200 text-pink-700 font-bold' : 'border-slate-200 text-slate-600 hover:bg-slate-50'}`}>{users.user_2.name}</button>
+                             <div className="grid grid-cols-3 gap-2">
+                                <button type="button" onClick={() => setSelectedAccount('SHARED')} className={`py-2 text-sm rounded-lg border ${selectedAccount === 'SHARED' ? 'bg-purple-50 border-purple-200 text-purple-700 font-bold' : 'border-slate-200 text-slate-600 hover:bg-slate-50'}`}>Shared</button>
+                                <button type="button" onClick={() => setSelectedAccount('USER_1')} className={`py-2 text-sm rounded-lg border ${selectedAccount === 'USER_1' ? 'bg-blue-50 border-blue-200 text-blue-700 font-bold' : 'border-slate-200 text-slate-600 hover:bg-slate-50'}`}>{users.user_1.name}</button>
+                                <button type="button" onClick={() => setSelectedAccount('USER_2')} className={`py-2 text-sm rounded-lg border ${selectedAccount === 'USER_2' ? 'bg-pink-50 border-pink-200 text-pink-700 font-bold' : 'border-slate-200 text-slate-600 hover:bg-slate-50'}`}>{users.user_2.name}</button>
                              </div>
                         </div>
                         <div className="col-span-1 md:col-span-2">

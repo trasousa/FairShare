@@ -75,7 +75,7 @@ export const DashboardCharts: React.FC<DashboardChartsProps> = ({ entries, categ
     .sort((a, b) => b.value - a.value)
     .slice(0, 10);
 
-  const COLORS = ['#6366f1', '#ec4899', '#3b82f6', '#10b981', '#f59e0b'];
+  const COLORS = ['#6366f1', '#ec4899', '#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4', '#f97316', '#84cc16'];
 
   const topTransactions = [...entries]
     .filter(e => {

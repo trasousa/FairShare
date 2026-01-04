@@ -1,12 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { Category, ExpenseEntry, AccountType, Budget, Trip, CurrencyCode, SavingsGoal } from '../types';
-import { AlertCircle, Plus, Save, Edit2, Check, X, Plane, Calendar as CalendarIcon, TrendingUp } from 'lucide-react';
+import { AlertCircle, Plus, Edit2, Check, X, Plane, TrendingUp } from 'lucide-react';
 
 interface MonthlyWorksheetProps {
   entries: ExpenseEntry[];
   budgets: Budget[];
   categories: Category[];
-  savings?: SavingsGoal[]; // Added savings prop to check for active goals
+  savings?: SavingsGoal[];
   trips: Trip[];
   monthId: string;
   currency: CurrencyCode;
@@ -16,19 +16,7 @@ interface MonthlyWorksheetProps {
   onDateClick: () => void;
 }
 
-const MoneyInput = ({ 
-  value, 
-  onChange, 
-  colorBase,
-  currency,
-  readOnly = false
-}: { 
-  value: number; 
-  onChange: (val: number) => void;
-  colorBase: 'purple' | 'blue' | 'pink' | 'emerald';
-  currency: CurrencyCode;
-  readOnly?: boolean;
-}) => {
+const MoneyInput = ({ value, onChange, colorBase, currency, readOnly = false }: { value: number; onChange: (val: number) => void; colorBase: 'purple' | 'blue' | 'pink' | 'emerald'; currency: CurrencyCode; readOnly?: boolean; }) => {
   const [localValue, setLocalValue] = useState(value === 0 ? '' : value.toString());
 
   useEffect(() => {
@@ -42,11 +30,7 @@ const MoneyInput = ({
     if (raw === '' || /^\d*\.?\d*$/.test(raw)) {
         setLocalValue(raw);
         const num = parseFloat(raw);
-        if (!isNaN(num)) {
-            onChange(num);
-        } else {
-            onChange(0);
-        }
+        onChange(!isNaN(num) ? num : 0);
     }
   };
 
@@ -61,7 +45,7 @@ const MoneyInput = ({
 
   return (
     <div className="relative group/input">
-        <span className="absolute left-2 top-1/2 -translate-y-1/2 text-slate-300 text-xs">{symbol}</span>
+        <span className="absolute left-2 top-1/2 -translate-y-1/2 text-slate-400 text-xs">{symbol}</span>
         <input 
             type="text" 
             inputMode="decimal"
@@ -70,49 +54,23 @@ const MoneyInput = ({
             className={`w-full pl-6 pr-2 py-1.5 text-sm border rounded-md outline-none focus:ring-2 transition text-right ${readOnly ? 'bg-slate-50 text-slate-400 cursor-not-allowed' : colorClasses[colorBase]} focus:ring-${colorBase}-200`}
             value={localValue}
             onChange={handleChange}
-            onBlur={() => {
-                if (localValue !== '') {
-                    const num = parseFloat(localValue);
-                    setLocalValue(num === 0 ? '' : num.toString());
-                }
-            }}
+            onBlur={() => setLocalValue(value === 0 ? '' : value.toString())}
         />
     </div>
   );
 };
 
-export const MonthlyWorksheet: React.FC<MonthlyWorksheetProps> = ({ 
-  entries, 
-  budgets, 
-  categories, 
-  savings = [],
-  trips,
-  monthId,
-  currency,
-  onUpdateEntry,
-  onAddCategory,
-  onEditCategory,
-  onDateClick
-}) => {
+export const MonthlyWorksheet: React.FC<MonthlyWorksheetProps> = ({ entries, budgets, categories, savings = [], trips, monthId, currency, onUpdateEntry, onAddCategory, onEditCategory, onDateClick }) => {
   const [isAddingCat, setIsAddingCat] = useState(false);
   const [newCatName, setNewCatName] = useState('');
   const [newCatGroup, setNewCatGroup] = useState('VARIABLE');
   const [newCatAccount, setNewCatAccount] = useState<AccountType>('SHARED');
-  
   const [activeTripId, setActiveTripId] = useState<string>('');
-  
   const [editingCatId, setEditingCatId] = useState<string | null>(null);
   const [editingName, setEditingName] = useState('');
 
-  const getAmount = (catId: string, account: AccountType) => {
-    return entries
-      .filter(e => e.categoryId === catId && e.account === account && e.monthId === monthId)
-      .reduce((sum, e) => sum + e.amount, 0);
-  };
-
-  const getBudget = (catId: string) => {
-    return budgets.find(b => b.categoryId === catId)?.limit || 0;
-  };
+  const getAmount = (catId: string, account: AccountType) => entries.filter(e => e.categoryId === catId && e.account === account && e.monthId === monthId).reduce((sum, e) => sum + e.amount, 0);
+  const getBudget = (catId: string) => budgets.find(b => b.categoryId === catId)?.limit || 0;
 
   const handleAddSubmit = (e: React.FormEvent) => {
       e.preventDefault();
@@ -136,13 +94,8 @@ export const MonthlyWorksheet: React.FC<MonthlyWorksheetProps> = ({
   };
 
   const renderSection = (title: string, filterFn: (c: Category) => boolean, showShared: boolean, showU1: boolean, showU2: boolean, isTravelSection = false, isSavingsSection = false) => {
-    
-    // Strict filtering: For savings section, only show categories that have a corresponding active Goal
     let sectionCategories = categories.filter(filterFn);
-    if (isSavingsSection) {
-        sectionCategories = sectionCategories.filter(cat => savings.some(s => s.id === cat.id));
-    }
-
+    if (isSavingsSection) sectionCategories = sectionCategories.filter(cat => savings.some(s => s.id === cat.id));
     if (sectionCategories.length === 0) return null;
 
     return (
@@ -152,20 +105,13 @@ export const MonthlyWorksheet: React.FC<MonthlyWorksheetProps> = ({
               {isSavingsSection && <TrendingUp size={16}/>}
               {title}
           </h3>
-          
           {isTravelSection && (
               <div className="flex items-center gap-2">
                   <span className="text-xs text-slate-500 font-medium">Assign to Trip:</span>
                   <div className="relative">
-                      <select 
-                        value={activeTripId} 
-                        onChange={(e) => setActiveTripId(e.target.value)}
-                        className="pl-7 pr-3 py-1 text-xs border border-indigo-200 bg-indigo-50 text-indigo-700 rounded-md outline-none focus:ring-2 focus:ring-indigo-200 cursor-pointer appearance-none"
-                      >
+                      <select value={activeTripId} onChange={(e) => setActiveTripId(e.target.value)} className="pl-7 pr-3 py-1 text-xs border border-indigo-200 bg-indigo-50 text-indigo-700 rounded-md outline-none focus:ring-2 focus:ring-indigo-200 cursor-pointer appearance-none">
                           <option value="">(General / None)</option>
-                          {trips.filter(t => t.status !== 'COMPLETED').map(t => (
-                              <option key={t.id} value={t.id}>{t.name}</option>
-                          ))}
+                          {trips.filter(t => t.status !== 'COMPLETED').map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
                       </select>
                       <Plane size={12} className="absolute left-2 top-1/2 -translate-y-1/2 text-indigo-500 pointer-events-none"/>
                   </div>
@@ -173,39 +119,36 @@ export const MonthlyWorksheet: React.FC<MonthlyWorksheetProps> = ({
           )}
       </div>
 
-      <div className="space-y-2">
+      <div className="hidden md:grid grid-cols-12 gap-4 items-center mb-2 px-2 text-xs font-semibold text-slate-400">
+          <div className="col-span-5">Category</div>
+          <div className="col-span-7 grid grid-cols-3 gap-2">
+            <div>Shared</div>
+            <div>User 1</div>
+            <div>User 2</div>
+          </div>
+      </div>
+
+      <div className="space-y-4">
         {sectionCategories.map(cat => {
             const budget = getBudget(cat.id);
             const sharedVal = getAmount(cat.id, 'SHARED');
             const u1Val = getAmount(cat.id, 'USER_1');
             const u2Val = getAmount(cat.id, 'USER_2');
-            
-            let rowTotal = 0;
-            if (showShared) rowTotal += sharedVal;
-            if (showU1) rowTotal += u1Val;
-            if (showU2) rowTotal += u2Val;
-
+            let rowTotal = (showShared ? sharedVal : 0) + (showU1 ? u1Val : 0) + (showU2 ? u2Val : 0);
             const isOverBudget = budget > 0 && rowTotal > budget;
             const isEditing = editingCatId === cat.id;
 
             return (
-              <div key={cat.id} className="grid grid-cols-12 gap-4 items-center hover:bg-slate-50 p-2 rounded-lg transition-colors group">
-                <div className="col-span-4 md:col-span-3">
+              <div key={cat.id} className="block md:grid md:grid-cols-12 md:gap-4 items-center hover:bg-slate-50 p-2 rounded-lg transition-colors group">
+                <div className="md:col-span-5 mb-2 md:mb-0">
                   {isEditing ? (
                       <div className="flex items-center gap-2">
-                          <input 
-                            autoFocus
-                            type="text" 
-                            value={editingName} 
-                            onChange={(e) => setEditingName(e.target.value)}
-                            className="w-full text-sm border border-indigo-300 rounded px-1 py-0.5 outline-none focus:ring-1 focus:ring-indigo-500"
-                            onKeyDown={(e) => e.key === 'Enter' && saveEditing()}
-                          />
+                          <input autoFocus type="text" value={editingName} onChange={(e) => setEditingName(e.target.value)} className="w-full text-sm border border-indigo-300 rounded px-1 py-0.5 outline-none focus:ring-1 focus:ring-indigo-500" onKeyDown={(e) => e.key === 'Enter' && saveEditing()} />
                           <button onClick={saveEditing} className="text-emerald-600 hover:bg-emerald-50 p-1 rounded"><Check size={14}/></button>
                           <button onClick={() => setEditingCatId(null)} className="text-slate-400 hover:bg-slate-100 p-1 rounded"><X size={14}/></button>
                       </div>
                   ) : (
-                      <div className="group/name flex items-center gap-2">
+                      <div className="group/name flex items-center justify-between">
                           <div>
                             <p className="font-medium text-slate-700 text-sm cursor-pointer" onClick={() => startEditing(cat)}>{cat.name}</p>
                             {budget > 0 && (
@@ -215,23 +158,17 @@ export const MonthlyWorksheet: React.FC<MonthlyWorksheetProps> = ({
                                 </div>
                             )}
                           </div>
-                          {!isSavingsSection && (
-                              <button onClick={() => startEditing(cat)} className="opacity-0 group-hover/name:opacity-100 text-slate-300 hover:text-indigo-500 transition-opacity">
-                                  <Edit2 size={12} />
-                              </button>
-                          )}
+                          {!isSavingsSection && <button onClick={() => startEditing(cat)} className="opacity-0 group-hover/name:opacity-100 text-slate-300 hover:text-indigo-500 transition-opacity"><Edit2 size={12} /></button>}
                       </div>
                   )}
                 </div>
                 
-                <div className="col-span-2 md:col-span-3">
-                    {showShared && <MoneyInput value={sharedVal} onChange={(val) => onUpdateEntry(cat.id, 'SHARED', val, activeTripId)} colorBase={isSavingsSection ? 'emerald' : 'purple'} currency={currency}/>}
-                </div>
-                <div className="col-span-3">
-                    {showU1 && <MoneyInput value={u1Val} onChange={(val) => onUpdateEntry(cat.id, 'USER_1', val, activeTripId)} colorBase={isSavingsSection ? 'emerald' : 'blue'} currency={currency}/>}
-                </div>
-                <div className="col-span-3">
-                    {showU2 && <MoneyInput value={u2Val} onChange={(val) => onUpdateEntry(cat.id, 'USER_2', val, activeTripId)} colorBase={isSavingsSection ? 'emerald' : 'pink'} currency={currency}/>}
+                <div className="md:col-span-7">
+                    <div className="grid grid-cols-3 gap-2">
+                        <div>{showShared && <MoneyInput value={sharedVal} onChange={(val) => onUpdateEntry(cat.id, 'SHARED', val, activeTripId)} colorBase={isSavingsSection ? 'emerald' : 'purple'} currency={currency}/>}</div>
+                        <div>{showU1 && <MoneyInput value={u1Val} onChange={(val) => onUpdateEntry(cat.id, 'USER_1', val, activeTripId)} colorBase={isSavingsSection ? 'emerald' : 'blue'} currency={currency}/>}</div>
+                        <div>{showU2 && <MoneyInput value={u2Val} onChange={(val) => onUpdateEntry(cat.id, 'USER_2', val, activeTripId)} colorBase={isSavingsSection ? 'emerald' : 'pink'} currency={currency}/>}</div>
+                    </div>
                 </div>
               </div>
             );
@@ -243,8 +180,8 @@ export const MonthlyWorksheet: React.FC<MonthlyWorksheetProps> = ({
 
   return (
     <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden relative">
-        <div className="bg-slate-50 border-b border-slate-200 px-6 py-2.5 flex flex-col md:flex-row justify-between items-center gap-4">
-             <span className="text-xs font-medium text-slate-400">Enter your expenses directly in the columns below.</span>
+        <div className="bg-slate-50 border-b border-slate-200 px-4 py-3 flex flex-col md:flex-row justify-between items-center gap-4">
+             <span className="text-xs font-medium text-slate-500 text-center md:text-left">Enter your expenses directly in the columns below.</span>
             <div className="flex gap-4 text-xs font-semibold uppercase tracking-wider text-slate-500">
                 <div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full bg-purple-500"></div>Shared</div>
                 <div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full bg-blue-500"></div>User 1</div>
@@ -252,45 +189,42 @@ export const MonthlyWorksheet: React.FC<MonthlyWorksheetProps> = ({
             </div>
         </div>
         
-        <div className="p-6 pb-24">
-            {renderSection("Wealth Building & Savings", (c) => c.group === 'SAVINGS', true, true, true, false, true)}
-            {renderSection("Shared Household & Living", (c) => c.group !== 'TRAVEL' && c.group !== 'SAVINGS' && c.defaultAccount === 'SHARED', true, false, false)}
-            {renderSection("Personal Expenses", (c) => c.group !== 'TRAVEL' && c.group !== 'SAVINGS' && c.defaultAccount !== 'SHARED', false, true, true)}
-            {renderSection("Travel & Adventures", (c) => c.group === 'TRAVEL', true, true, true, true)}
+        <div className="p-4 sm:p-6 pb-24">
+            {renderSection("Wealth Building & Savings", c => c.group === 'SAVINGS', true, true, true, false, true)}
+            {renderSection("Shared Household & Living", c => c.group !== 'TRAVEL' && c.group !== 'SAVINGS' && c.defaultAccount === 'SHARED', true, false, false)}
+            {renderSection("Personal Expenses", c => c.group !== 'TRAVEL' && c.group !== 'SAVINGS' && c.defaultAccount !== 'SHARED', false, true, true)}
+            {renderSection("Travel & Adventures", c => c.group === 'TRAVEL', true, true, true, true)}
         </div>
 
-        <div className="absolute bottom-0 w-full bg-white border-t border-slate-200 p-4">
+        <div className="absolute bottom-0 w-full bg-white/80 backdrop-blur-sm border-t border-slate-200 p-3">
              {!isAddingCat ? (
-                 <button 
-                    onClick={() => setIsAddingCat(true)}
-                    className="flex items-center gap-2 text-indigo-600 hover:text-indigo-700 font-medium text-sm px-2"
-                 >
+                 <button onClick={() => setIsAddingCat(true)} className="flex items-center gap-2 text-indigo-600 hover:text-indigo-700 font-medium text-sm px-2">
                      <Plus size={18} /> Add New Category
                  </button>
              ) : (
-                 <form onSubmit={handleAddSubmit} className="flex flex-col sm:flex-row gap-3 items-end">
-                     <div className="flex-1 w-full">
+                 <form onSubmit={handleAddSubmit} className="flex flex-col md:flex-row gap-2 items-stretch md:items-end">
+                     <div className="flex-1">
                          <label className="block text-xs font-medium text-slate-500 mb-1">Category Name</label>
                          <input autoFocus type="text" value={newCatName} onChange={e => setNewCatName(e.target.value)} className="w-full border border-slate-300 rounded-lg p-2 text-sm focus:ring-2 focus:ring-indigo-200 outline-none" placeholder="e.g. Pet Care" />
                      </div>
-                     <div className="w-full sm:w-32">
+                     <div className="w-full md:w-36">
                          <label className="block text-xs font-medium text-slate-500 mb-1">Group</label>
-                         <select value={newCatGroup} onChange={e => setNewCatGroup(e.target.value)} className="w-full border border-slate-300 rounded-lg p-2 text-sm">
+                         <select value={newCatGroup} onChange={e => setNewCatGroup(e.target.value)} className="w-full border border-slate-300 rounded-lg p-2 text-sm h-full">
                              <option value="FIXED">Fixed</option>
                              <option value="VARIABLE">Variable</option>
                              <option value="LIFESTYLE">Lifestyle</option>
                              <option value="TRAVEL">Travel</option>
                          </select>
                      </div>
-                     <div className="w-full sm:w-32">
+                     <div className="w-full md:w-36">
                          <label className="block text-xs font-medium text-slate-500 mb-1">Default</label>
-                         <select value={newCatAccount} onChange={e => setNewCatAccount(e.target.value as AccountType)} className="w-full border border-slate-300 rounded-lg p-2 text-sm">
+                         <select value={newCatAccount} onChange={e => setNewCatAccount(e.target.value as AccountType)} className="w-full border border-slate-300 rounded-lg p-2 text-sm h-full">
                              <option value="SHARED">Shared</option>
                              <option value="USER_1">User 1</option>
                              <option value="USER_2">User 2</option>
                          </select>
                      </div>
-                     <div className="flex gap-2">
+                     <div className="flex gap-2 self-end">
                         <button type="submit" className="bg-slate-900 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-slate-800">Add</button>
                         <button type="button" onClick={() => setIsAddingCat(false)} className="bg-slate-100 text-slate-600 px-3 py-2 rounded-lg text-sm hover:bg-slate-200">Cancel</button>
                      </div>

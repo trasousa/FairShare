@@ -146,6 +146,13 @@ export const TravelDashboard: React.FC<TravelDashboardProps> = ({ trips, entries
                     </div>
                 );
             })}
+            <div className="bg-indigo-900 text-white rounded-xl shadow-lg p-6 flex flex-col justify-center">
+                <div className="w-12 h-12 bg-white/10 rounded-full flex items-center justify-center mb-4 text-2xl">✈️</div>
+                <h3 className="text-lg font-bold mb-2">Travel Smart</h3>
+                <p className="text-indigo-200 text-sm leading-relaxed">
+                    Create a trip to track expenses separate from your monthly budget. Assign expenses to categories like Flight or Food to see exactly where your vacation money goes.
+                </p>
+            </div>
         </div>
     </div>
   );
