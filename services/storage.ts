@@ -1,4 +1,4 @@
-import { AppInstance, User, CurrencyCode } from "../types";
+import { AppInstance, User, CurrencyCode, Category } from "../types";
 import { USERS, INITIAL_CATEGORIES, INITIAL_BUDGETS, INITIAL_SAVINGS, INITIAL_ENTRIES, INITIAL_TRIPS, INITIAL_INCOMES } from "../constants";
 
 // Helper to generate a unique ID

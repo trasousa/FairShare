@@ -9,7 +9,7 @@ interface MonthPickerProps {
 }
 
 export const MonthPicker: React.FC<MonthPickerProps> = ({ isOpen, onClose, currentMonthId, onSelect }) => {
-  const [year] = (currentMonthId || new Date().toISOString().slice(0, 7)).split('-');
+  const [year, monthStr] = (currentMonthId || new Date().toISOString().slice(0, 7)).split('-');
   const [selectedYear, setSelectedYear] = React.useState(parseInt(year) || new Date().getFullYear());
 
   if (!isOpen) return null;
