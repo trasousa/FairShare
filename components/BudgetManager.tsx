@@ -1,7 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { Budget, Category, AccountType, User, SavingsGoal, ExpenseEntry, CurrencyCode } from '../types';
 import { formatCurrency } from '../services/financeService';
-import { Plus, Target, X, Users, PiggyBank, TrendingUp } from 'lucide-react';
+import { Plus, Target, X, Users, PiggyBank, TrendingUp, Calendar } from 'lucide-react';
 
 interface BudgetManagerProps {
   budgets: Budget[];
@@ -191,7 +191,7 @@ export const BudgetManager: React.FC<BudgetManagerProps> = ({ budgets, categorie
                     <select 
                         value={selectedYear} 
                         onChange={e => setSelectedYear(e.target.value)}
-                        className="bg-white border border-slate-300 rounded-lg p-2 text-sm focus:ring-2 focus:ring-indigo-200 outline-none"
+                        className="bg-white border border-slate-300 rounded-lg p-2 text-sm focus:ring-2 focus:ring-indigo-200 outline-none text-slate-700"
                     >
                         {availableYears.map(year => <option key={year} value={year}>{year}</option>)}
                     </select>

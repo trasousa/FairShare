@@ -56,7 +56,7 @@ export const TravelDashboard: React.FC<TravelDashboardProps> = ({ trips, entries
                 <select 
                     value={selectedYear} 
                     onChange={e => setSelectedYear(e.target.value)}
-                    className="bg-white border border-slate-300 rounded-lg p-2 text-sm focus:ring-2 focus:ring-indigo-200 outline-none"
+                    className="bg-white border border-slate-300 rounded-lg p-2 text-sm focus:ring-2 focus:ring-indigo-200 outline-none text-slate-700"
                 >
                     {availableYears.map(year => (
                         <option key={year} value={year}>{year}</option>
