@@ -27,6 +27,7 @@ import { TravelDashboard } from './components/TravelDashboard';
 import { IncomeManager } from './components/IncomeManager';
 import { SettingsPage } from './components/SettingsPage';
 import { MonthPicker } from './components/MonthPicker';
+import { ErrorBoundary } from './components/ErrorBoundary'; // Import ErrorBoundary
 import { getInstance, saveInstance } from './services/storage';
 
 type MainTab = 'insights' | 'register' | 'planning' | 'settings';
@@ -231,6 +232,8 @@ function App({ instanceId, onExit }: AppProps) {
         currentMonthId={currentMonth} onSelect={setCurrentMonth}
       />
 
+      {sidebarOpen && <div className="fixed inset-0 bg-black/50 z-40 lg:hidden" onClick={() => setSidebarOpen(false)} />}
+
       {/* Top Navigation (Desktop) */}
       <header className={`fixed top-0 left-0 right-0 h-16 border-b px-4 lg:px-8 flex items-center justify-between z-40 ${navBarClass}`}>
            <div className="flex items-center gap-8">
@@ -339,83 +342,83 @@ function App({ instanceId, onExit }: AppProps) {
 
         {/* Main Content Area */}
         <div className="pt-20 px-4 pb-24 lg:px-8 max-w-7xl mx-auto w-full space-y-6">
-          
-          {activeMainTab === 'insights' && activeInsightsView === 'global' && (
-              <DashboardCharts entries={filteredDashboardEntries} categories={categories} incomes={filteredDashboardIncomes} users={users} currency={currency} />
-          )}
+          <ErrorBoundary componentName="Main Content">
+            {activeMainTab === 'insights' && activeInsightsView === 'global' && (
+                <DashboardCharts entries={filteredDashboardEntries} categories={categories} incomes={filteredDashboardIncomes} users={users} currency={currency} />
+            )}
 
-          {activeMainTab === 'insights' && activeInsightsView === 'monthly' && (
-              <MonthlyDashboard currentMonth={currentMonth} entries={entries} budgets={budgets} categories={categories} savings={savings} incomes={incomes} users={users} currency={currency} />
-          )}
+            {activeMainTab === 'insights' && activeInsightsView === 'monthly' && (
+                <MonthlyDashboard currentMonth={currentMonth} entries={entries} budgets={budgets} categories={categories} savings={savings} incomes={incomes} users={users} currency={currency} />
+            )}
 
-          {activeMainTab === 'register' && (
-              <div className="space-y-6">
-                  {/* Register Sub-Nav (Visible on Mobile/Tablet if not using dropdown, but here we use state) */}
-                  <div className="flex md:hidden justify-center bg-white/5 p-1 rounded-xl gap-2 mb-4">
-                      <button onClick={() => setActiveRegisterView('single')} className={`flex-1 py-2 text-xs font-bold rounded-lg ${activeRegisterView === 'single' ? 'bg-indigo-600 text-white' : 'text-slate-500'}`}>Single</button>
-                      <button onClick={() => setActiveRegisterView('worksheet')} className={`flex-1 py-2 text-xs font-bold rounded-lg ${activeRegisterView === 'worksheet' ? 'bg-indigo-600 text-white' : 'text-slate-500'}`}>Form</button>
-                      <button onClick={() => setActiveRegisterView('income')} className={`flex-1 py-2 text-xs font-bold rounded-lg ${activeRegisterView === 'income' ? 'bg-indigo-600 text-white' : 'text-slate-500'}`}>Income</button>
-                  </div>
+            {activeMainTab === 'register' && (
+                <div className="space-y-6">
+                    {/* Register Sub-Nav (Visible on Mobile/Tablet if not using dropdown, but here we use state) */}
+                    <div className="flex md:hidden justify-center bg-white/5 p-1 rounded-xl gap-2 mb-4">
+                        <button onClick={() => setActiveRegisterView('single')} className={`flex-1 py-2 text-xs font-bold rounded-lg ${activeRegisterView === 'single' ? 'bg-indigo-600 text-white' : 'text-slate-500'}`}>Single</button>
+                        <button onClick={() => setActiveRegisterView('worksheet')} className={`flex-1 py-2 text-xs font-bold rounded-lg ${activeRegisterView === 'worksheet' ? 'bg-indigo-600 text-white' : 'text-slate-500'}`}>Form</button>
+                        <button onClick={() => setActiveRegisterView('income')} className={`flex-1 py-2 text-xs font-bold rounded-lg ${activeRegisterView === 'income' ? 'bg-indigo-600 text-white' : 'text-slate-500'}`}>Income</button>
+                    </div>
 
-                  {activeRegisterView === 'worksheet' && (
-                      <MonthlyWorksheet 
-                        entries={entries} budgets={budgets} categories={categories} savings={savings} trips={trips} monthId={currentMonth} currency={currency}
-                        onUpdateEntry={(cid, acc, amt, tid) => {
-                             setEntries(prev => {
-                                const singleSum = prev.filter(e => e.categoryId === cid && e.account === acc && e.monthId === currentMonth && e.entryType === 'single').reduce((s, e) => s + e.amount, 0);
-                                const needed = amt - singleSum;
-                                const idx = prev.findIndex(e => e.categoryId === cid && e.account === acc && e.monthId === currentMonth && e.entryType === 'worksheet');
-                                if (idx >= 0) { const next = [...prev]; next[idx] = { ...next[idx], amount: needed, ...(tid ? { tripId: tid } : {}) }; return next; }
-                                return [...prev, { id: Math.random().toString(36), monthId: currentMonth, categoryId: cid, account: acc, amount: needed, entryType: 'worksheet', tripId: tid }];
-                             });
-                        }}
-                        onAddCategory={(n, g, a) => setCategories(p => [...p, {id: n.toLowerCase().replace(/\s+/g, '_') + '_' + Math.random().toString(36).substr(2, 4), name: n, group: g as any, defaultAccount: a}])}
-                        onEditCategory={(id, n) => setCategories(p => p.map(c => c.id === id ? { ...c, name: n } : c))}
-                        onDateClick={() => setIsMonthPickerOpen(true)}
-                      />
-                  )}
-                  {activeRegisterView === 'single' && (
-                      <div className="max-w-xl mx-auto"><SingleEntryForm categories={categories} trips={trips} currentMonth={currentMonth} users={users} currency={currency} onAddEntry={(e) => setEntries(p => [...p, { ...e, id: Math.random().toString(36) }])} /></div>
-                  )}
-                  {activeRegisterView === 'income' && (
-                      <IncomeManager incomes={incomes} currentMonth={currentMonth} users={users} currency={currency} onAddIncome={(s, a, r, ir, mid) => setIncomes(p => [...p, {id: Math.random().toString(36), monthId: mid, source: s, amount: a, recipient: r, isRecurring: ir}])} onDeleteIncome={(id) => setIncomes(p => p.filter(i => i.id !== id))} />
-                  )}
-              </div>
-          )}
-          
-          {activeMainTab === 'planning' && (
-              <div className="space-y-6">
-                   <div className="flex md:hidden justify-center bg-white/5 p-1 rounded-xl gap-2 mb-4">
-                      <button onClick={() => setActivePlanningView('budget')} className={`flex-1 py-2 text-xs font-bold rounded-lg ${activePlanningView === 'budget' ? 'bg-indigo-600 text-white' : 'text-slate-500'}`}>Budgets</button>
-                      <button onClick={() => setActivePlanningView('travel')} className={`flex-1 py-2 text-xs font-bold rounded-lg ${activePlanningView === 'travel' ? 'bg-indigo-600 text-white' : 'text-slate-500'}`}>Trips</button>
-                  </div>
+                    {activeRegisterView === 'worksheet' && (
+                        <MonthlyWorksheet 
+                          entries={entries} budgets={budgets} categories={categories} savings={savings} trips={trips} monthId={currentMonth} currency={currency}
+                          onUpdateEntry={(cid, acc, amt, tid) => {
+                              setEntries(prev => {
+                                  const singleSum = prev.filter(e => e.categoryId === cid && e.account === acc && e.monthId === currentMonth && e.entryType === 'single').reduce((s, e) => s + e.amount, 0);
+                                  const needed = amt - singleSum;
+                                  const idx = prev.findIndex(e => e.categoryId === cid && e.account === acc && e.monthId === currentMonth && e.entryType === 'worksheet');
+                                  if (idx >= 0) { const next = [...prev]; next[idx] = { ...next[idx], amount: needed, ...(tid ? { tripId: tid } : {}) }; return next; }
+                                  return [...prev, { id: Math.random().toString(36), monthId: currentMonth, categoryId: cid, account: acc, amount: needed, entryType: 'worksheet', tripId: tid }];
+                              });
+                          }}
+                          onAddCategory={(n, g, a) => setCategories(p => [...p, {id: n.toLowerCase().replace(/\s+/g, '_') + '_' + Math.random().toString(36).substr(2, 4), name: n, group: g as any, defaultAccount: a}])}
+                          onEditCategory={(id, n) => setCategories(p => p.map(c => c.id === id ? { ...c, name: n } : c))}
+                          onDateClick={() => setIsMonthPickerOpen(true)}
+                        />
+                    )}
+                    {activeRegisterView === 'single' && (
+                        <div className="max-w-xl mx-auto"><SingleEntryForm categories={categories} trips={trips} currentMonth={currentMonth} users={users} currency={currency} onAddEntry={(e) => setEntries(p => [...p, { ...e, id: Math.random().toString(36) }])} /></div>
+                    )}
+                    {activeRegisterView === 'income' && (
+                        <IncomeManager incomes={incomes} currentMonth={currentMonth} users={users} currency={currency} onAddIncome={(s, a, r, ir, mid) => setIncomes(p => [...p, {id: Math.random().toString(36), monthId: mid, source: s, amount: a, recipient: r, isRecurring: ir}])} onDeleteIncome={(id) => setIncomes(p => p.filter(i => i.id !== id))} />
+                    )}
+                </div>
+            )}
+            
+            {activeMainTab === 'planning' && (
+                <div className="space-y-6">
+                    <div className="flex md:hidden justify-center bg-white/5 p-1 rounded-xl gap-2 mb-4">
+                        <button onClick={() => setActivePlanningView('budget')} className={`flex-1 py-2 text-xs font-bold rounded-lg ${activePlanningView === 'budget' ? 'bg-indigo-600 text-white' : 'text-slate-500'}`}>Budgets</button>
+                        <button onClick={() => setActivePlanningView('travel')} className={`flex-1 py-2 text-xs font-bold rounded-lg ${activePlanningView === 'travel' ? 'bg-indigo-600 text-white' : 'text-slate-500'}`}>Trips</button>
+                    </div>
 
-                  {activePlanningView === 'travel' && <TravelDashboard trips={trips} entries={entries} currency={currency} onAddTrip={(t) => setTrips(p => [...p, { ...t, id: Math.random().toString(36) }])} onUpdateTrip={(updatedTrip) => setTrips(p => p.map(t => t.id === updatedTrip.id ? updatedTrip : t))} />}
-                  
-                  {activePlanningView === 'budget' && <BudgetManager budgets={budgets} categories={categories} savings={savings} entries={entries} totalIncome={currentTotalIncome} users={users} currency={currency}
-                    onAddBudget={(cid, lim, acc) => setBudgets(p => [...p, { categoryId: cid, limit: lim, account: acc }])}
-                    onAddGoal={(n, t, tt, i, acc, sd, td) => {
-                        const gid = n.toLowerCase().replace(/\s+/g, '_') + '_' + Math.random().toString(36).substr(2, 4);
-                        setCategories(p => [...p, { id: gid, name: n, group: 'SAVINGS', defaultAccount: acc }]);
-                        setSavings(p => [...p, { id: gid, name: n, targetAmount: t, targetType: tt, initialAmount: i, account: acc, startDate: sd, targetDate: td }]);
-                    }}
-                  />}
-              </div>
-          )}
-          
-          {activeMainTab === 'settings' && (
-            <SettingsPage 
-                users={users} 
-                currency={currency} 
-                theme={theme}
-                onUpdateUser={handleUpdateUser} 
-                onUpdateCurrency={setCurrency} 
-                onUpdateTheme={handleUpdateTheme}
-                onExport={handleExport}
-                onExit={onExit}
-            />
-          )}
-
+                    {activePlanningView === 'travel' && <TravelDashboard trips={trips} entries={entries} currency={currency} onAddTrip={(t) => setTrips(p => [...p, { ...t, id: Math.random().toString(36) }])} onUpdateTrip={(updatedTrip) => setTrips(p => p.map(t => t.id === updatedTrip.id ? updatedTrip : t))} />}
+                    
+                    {activePlanningView === 'budget' && <BudgetManager budgets={budgets} categories={categories} savings={savings} entries={entries} totalIncome={currentTotalIncome} users={users} currency={currency}
+                      onAddBudget={(cid, lim, acc) => setBudgets(p => [...p, { categoryId: cid, limit: lim, account: acc }])}
+                      onAddGoal={(n, t, tt, i, acc, sd, td) => {
+                          const gid = n.toLowerCase().replace(/\s+/g, '_') + '_' + Math.random().toString(36).substr(2, 4);
+                          setCategories(p => [...p, { id: gid, name: n, group: 'SAVINGS', defaultAccount: acc }]);
+                          setSavings(p => [...p, { id: gid, name: n, targetAmount: t, targetType: tt, initialAmount: i, account: acc, startDate: sd, targetDate: td }]);
+                      }}
+                    />}
+                </div>
+            )}
+            
+            {activeMainTab === 'settings' && (
+              <SettingsPage 
+                  users={users} 
+                  currency={currency} 
+                  theme={theme}
+                  onUpdateUser={handleUpdateUser} 
+                  onUpdateCurrency={setCurrency} 
+                  onUpdateTheme={handleUpdateTheme}
+                  onExport={handleExport}
+                  onExit={onExit}
+              />
+            )}
+          </ErrorBoundary>
         </div>
 
         {/* Mobile Bottom Navigation */}
