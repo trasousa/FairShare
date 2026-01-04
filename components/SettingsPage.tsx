@@ -1,16 +1,18 @@
 import React, { useState } from 'react';
 import { User, UserId, CurrencyCode } from '../types';
-import { Save, User as UserIcon, Upload, RotateCcw, Download, Database } from 'lucide-react';
+import { Save, User as UserIcon, Upload, RotateCcw, Download, Database, Sun, Moon } from 'lucide-react';
 
 interface SettingsPageProps {
   users: Record<string, User>;
   currency: CurrencyCode;
+  theme?: 'light' | 'dark';
   onUpdateUser: (id: UserId, data: Partial<User>) => void;
   onUpdateCurrency: (c: CurrencyCode) => void;
+  onUpdateTheme: (t: 'light' | 'dark') => void;
   onExport: () => void;
 }
 
-export const SettingsPage: React.FC<SettingsPageProps> = ({ users, currency, onUpdateUser, onUpdateCurrency, onExport }) => {
+export const SettingsPage: React.FC<SettingsPageProps> = ({ users, currency, theme = 'light', onUpdateUser, onUpdateCurrency, onUpdateTheme, onExport }) => {
   const [localUsers, setLocalUsers] = useState(users);
   const [successMsg, setSuccessMsg] = useState('');
 
@@ -64,7 +66,26 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ users, currency, onU
                          ))}
                      </div>
                  </div>
-                 <div className="flex items-end">
+                 
+                 <div>
+                     <label className="block text-sm font-medium text-slate-700 mb-2">Theme</label>
+                     <div className="flex bg-slate-100 rounded-lg p-1 w-fit">
+                         <button 
+                            onClick={() => onUpdateTheme('light')}
+                            className={`flex items-center gap-2 px-4 py-2 text-sm font-bold rounded-md transition ${theme === 'light' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                         >
+                             <Sun size={16} /> Light
+                         </button>
+                         <button 
+                            onClick={() => onUpdateTheme('dark')}
+                            className={`flex items-center gap-2 px-4 py-2 text-sm font-bold rounded-md transition ${theme === 'dark' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                         >
+                             <Moon size={16} /> Dark
+                         </button>
+                     </div>
+                 </div>
+
+                 <div className="md:col-span-2 flex justify-end">
                      <button 
                         onClick={onExport}
                         className="flex items-center gap-2 border border-slate-300 text-slate-700 px-4 py-2.5 rounded-lg text-sm font-medium hover:bg-slate-50 transition"

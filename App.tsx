@@ -68,6 +68,7 @@ function App({ instanceId, onExit }: AppProps) {
   const [activeTab, setActiveTab] = useState<Tab>('overview');
   const [trackerMode, setTrackerMode] = useState<TrackerMode>('worksheet');
   const [dashboardRange, setDashboardRange] = useState<TimeRange>('THIS_YEAR');
+  const [theme, setTheme] = useState<'light' | 'dark'>('light');
   
   const today = new Date();
   const defaultMonth = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`;
@@ -94,6 +95,7 @@ function App({ instanceId, onExit }: AppProps) {
             setInstanceName(data.name);
             setUsers(data.users);
             setCurrency(data.currency);
+            setTheme(data.theme || 'light');
             setEntries(data.data.entries);
             setIncomes(data.data.incomes);
             setCategories(data.data.categories);
@@ -108,7 +110,7 @@ function App({ instanceId, onExit }: AppProps) {
     loadData();
   }, [instanceId]);
 
-  // Persist Data Changes (With auto-save debouncing logic implied by Effect nature)
+  // Persist Data Changes
   useEffect(() => {
       if (loading) return;
       
@@ -119,9 +121,10 @@ function App({ instanceId, onExit }: AppProps) {
           const updatedInstance: AppInstance = {
               id: instanceId,
               name: instanceName,
-              created: Date.now(), // This timestamp is effectively updated on every save, which is fine for sorting "Recently Used"
+              created: Date.now(),
               lastAccessed: Date.now(),
               currency: currency,
+              theme: theme,
               users: users,
               data: {
                   entries,
@@ -136,11 +139,10 @@ function App({ instanceId, onExit }: AppProps) {
           setSaveStatus('saved');
       };
 
-      // Simple debounce to avoid hitting IndexedDB on every keystroke too hard
       const timeoutId = setTimeout(saveData, 1000); 
       return () => clearTimeout(timeoutId);
 
-  }, [entries, incomes, categories, budgets, savings, trips, users, currency, instanceName, loading]);
+  }, [entries, incomes, categories, budgets, savings, trips, users, currency, instanceName, theme, loading]);
 
   const changeMonth = (direction: -1 | 1) => {
       const [year, month] = currentMonth.split('-').map(Number);
@@ -163,6 +165,10 @@ function App({ instanceId, onExit }: AppProps) {
   // --- Handlers ---
   const handleUpdateUser = (id: UserId, data: Partial<User>) => {
       setUsers(prev => ({ ...prev, [id]: { ...prev[id], ...data } }));
+  };
+
+  const handleUpdateTheme = (t: 'light' | 'dark') => {
+      setTheme(t);
   };
 
   const handleExport = async () => {
@@ -197,8 +203,12 @@ function App({ instanceId, onExit }: AppProps) {
 
   if (loading) return <div className="min-h-screen flex items-center justify-center bg-slate-100 text-slate-400">Loading Database...</div>;
 
+  const bgClass = theme === 'dark' ? 'bg-slate-950 text-slate-100' : 'bg-slate-100 text-slate-800';
+  const headerClass = theme === 'dark' ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200';
+  const sidebarClass = 'fixed lg:sticky top-0 left-0 h-screen w-64 bg-slate-900 text-white z-50 transition-transform duration-300 transform';
+
   return (
-    <div className="flex min-h-screen bg-slate-100 text-slate-800 font-sans">
+    <div className={`flex min-h-screen font-sans transition-colors duration-300 ${bgClass}`}>
       
       <MonthPicker 
         isOpen={isMonthPickerOpen} onClose={() => setIsMonthPickerOpen(false)} 
@@ -208,7 +218,7 @@ function App({ instanceId, onExit }: AppProps) {
       {sidebarOpen && <div className="fixed inset-0 bg-black/50 z-40 lg:hidden" onClick={() => setSidebarOpen(false)} />}
 
       {/* Sidebar Navigation */}
-      <aside className={`fixed lg:sticky top-0 left-0 h-screen w-64 bg-slate-900 text-white z-50 transition-transform duration-300 transform ${sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'} flex flex-col`}>
+      <aside className={`${sidebarClass} ${sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'} flex flex-col`}>
         <div className="h-16 flex items-center justify-between px-6 border-b border-slate-800 shrink-0">
           <div className="flex items-center gap-3">
              <div className="w-8 h-8 bg-indigo-500 rounded-lg flex items-center justify-center font-bold text-white">FS</div>
@@ -269,12 +279,12 @@ function App({ instanceId, onExit }: AppProps) {
       {/* Main Content */}
       <main className="flex-1 flex flex-col min-w-0">
         
-        <header className="h-16 bg-white border-b border-slate-200 px-4 lg:px-8 flex items-center justify-between sticky top-0 z-30">
+        <header className={`h-16 border-b px-4 lg:px-8 flex items-center justify-between sticky top-0 z-30 transition-colors ${headerClass}`}>
            <div className="flex items-center gap-4">
                <button onClick={() => setSidebarOpen(true)} className="lg:hidden p-2 text-slate-500 hover:bg-slate-100 rounded-lg">
                    <Menu size={24} />
                </button>
-               <h1 className="text-xl font-bold text-slate-800 capitalize flex items-center gap-2">
+               <h1 className={`text-xl font-bold capitalize flex items-center gap-2 ${theme === 'dark' ? 'text-white' : 'text-slate-800'}`}>
                    {activeTab === 'overview' ? 'Global Analysis' : 
                     activeTab === 'monthly' ? 'Monthly Analysis' :
                     activeTab === 'tracker' ? 'Financial Tracker' : 
@@ -286,14 +296,14 @@ function App({ instanceId, onExit }: AppProps) {
            <div className="flex items-center gap-2 sm:gap-6">
                
                {/* Save Status Indicator */}
-               <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-slate-50 border border-slate-100 transition-colors">
+               <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full border transition-colors ${theme === 'dark' ? 'bg-slate-800 border-slate-700' : 'bg-slate-50 border-slate-100'}`}>
                    {saveStatus === 'saved' ? (
                        <CheckCircle2 size={14} className="text-emerald-500" />
                    ) : (
                        <Cloud size={14} className="text-indigo-500 animate-pulse" />
                    )}
                    <span className="text-xs font-medium text-slate-500 hidden sm:inline">
-                       {saveStatus === 'saved' ? 'Saved to DB' : 'Saving...'}
+                       {saveStatus === 'saved' ? 'Saved' : 'Saving...'}
                    </span>
                </div>
 
@@ -301,7 +311,7 @@ function App({ instanceId, onExit }: AppProps) {
                  <div className="relative">
                     <select 
                       value={dashboardRange} onChange={(e) => setDashboardRange(e.target.value as TimeRange)}
-                      className="appearance-none bg-slate-100 border-none rounded-lg py-2 pl-4 pr-10 text-sm font-semibold text-slate-700 focus:ring-2 focus:ring-indigo-100 cursor-pointer"
+                      className={`appearance-none border-none rounded-lg py-2 pl-4 pr-10 text-sm font-semibold focus:ring-2 focus:ring-indigo-500 cursor-pointer transition-colors ${theme === 'dark' ? 'bg-slate-800 text-slate-200' : 'bg-slate-100 text-slate-700'}`}
                     >
                       <option value="THIS_MONTH">This Month</option>
                       <option value="LAST_3_MONTHS">Last 3 Months</option>
@@ -315,10 +325,10 @@ function App({ instanceId, onExit }: AppProps) {
 
                {/* Month Selector */}
                {(['tracker', 'monthly'].includes(activeTab)) && (
-                 <div className="flex items-center bg-slate-100 rounded-lg p-1">
-                      <button onClick={() => changeMonth(-1)} className="p-1.5 hover:bg-white hover:shadow-sm rounded-md text-slate-500 transition"><ChevronLeft size={16} /></button>
-                      <button onClick={() => setIsMonthPickerOpen(true)} className="px-3 text-sm font-semibold text-slate-700 w-32 text-center select-none hover:bg-white hover:shadow-sm rounded-md py-1.5 transition">{monthLabel}</button>
-                      <button onClick={() => changeMonth(1)} className="p-1.5 hover:bg-white hover:shadow-sm rounded-md text-slate-500 transition"><ChevronRight size={16} /></button>
+                 <div className={`flex items-center rounded-lg p-1 transition-colors ${theme === 'dark' ? 'bg-slate-800' : 'bg-slate-100'}`}>
+                      <button onClick={() => changeMonth(-1)} className={`p-1.5 rounded-md transition-colors ${theme === 'dark' ? 'hover:bg-slate-700 text-slate-400' : 'hover:bg-white text-slate-500'}`}><ChevronLeft size={16} /></button>
+                      <button onClick={() => setIsMonthPickerOpen(true)} className={`px-3 text-sm font-semibold w-32 text-center select-none py-1.5 transition-colors rounded-md ${theme === 'dark' ? 'hover:bg-slate-700 text-slate-200' : 'hover:bg-white text-slate-700'}`}>{monthLabel}</button>
+                      <button onClick={() => changeMonth(1)} className={`p-1.5 rounded-md transition-colors ${theme === 'dark' ? 'hover:bg-slate-700 text-slate-400' : 'hover:bg-white text-slate-500'}`}><ChevronRight size={16} /></button>
                  </div>
                )}
            </div>
@@ -334,22 +344,22 @@ function App({ instanceId, onExit }: AppProps) {
               <div className="space-y-6">
                   {/* Tracker Sub-Navigation */}
                   <div className="flex flex-col sm:flex-row justify-center items-center gap-4">
-                      <div className="bg-white p-1 rounded-xl shadow-sm border border-slate-200 inline-flex w-full sm:w-auto overflow-x-auto">
+                      <div className={`p-1 rounded-xl shadow-sm border inline-flex w-full sm:w-auto overflow-x-auto transition-colors ${theme === 'dark' ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200'}`}>
                           <button 
                             onClick={() => setTrackerMode('worksheet')} 
-                            className={`flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium transition whitespace-nowrap ${trackerMode === 'worksheet' ? 'bg-indigo-50 text-indigo-600 shadow-sm' : 'text-slate-500 hover:bg-slate-50'}`}
+                            className={`flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium transition whitespace-nowrap ${trackerMode === 'worksheet' ? 'bg-indigo-600 text-white shadow-sm' : 'text-slate-500 hover:bg-indigo-500/10'}`}
                           >
                               <Grid size={16} /> Worksheet
                           </button>
                           <button 
                             onClick={() => setTrackerMode('single')} 
-                            className={`flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium transition whitespace-nowrap ${trackerMode === 'single' ? 'bg-indigo-50 text-indigo-600 shadow-sm' : 'text-slate-500 hover:bg-slate-50'}`}
+                            className={`flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium transition whitespace-nowrap ${trackerMode === 'single' ? 'bg-indigo-600 text-white shadow-sm' : 'text-slate-500 hover:bg-indigo-500/10'}`}
                           >
                               <List size={16} /> Single Entry
                           </button>
                           <button 
                             onClick={() => setTrackerMode('income')} 
-                            className={`flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium transition whitespace-nowrap ${trackerMode === 'income' ? 'bg-emerald-50 text-emerald-600 shadow-sm' : 'text-slate-500 hover:bg-slate-50'}`}
+                            className={`flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium transition whitespace-nowrap ${trackerMode === 'income' ? 'bg-emerald-600 text-white shadow-sm' : 'text-slate-500 hover:bg-emerald-500/10'}`}
                           >
                               <ArrowUpRight size={16} /> Income
                           </button>
@@ -417,14 +427,24 @@ function App({ instanceId, onExit }: AppProps) {
 
           {activeTab === 'budget' && <BudgetManager budgets={budgets} categories={categories} savings={savings} entries={entries} totalIncome={currentTotalIncome} users={users} currency={currency}
             onAddBudget={(cid, lim, acc) => setBudgets(p => [...p, { categoryId: cid, limit: lim, account: acc }])}
-            onAddGoal={(n, t, tt, i, acc) => {
+            onAddGoal={(n, t, tt, i, acc, sd, td) => {
                 const gid = n.toLowerCase().replace(/\s+/g, '_') + '_' + Math.random().toString(36).substr(2, 4);
                 setCategories(p => [...p, { id: gid, name: n, group: 'SAVINGS', defaultAccount: acc }]);
-                setSavings(p => [...p, { id: gid, name: n, targetAmount: t, targetType: tt, initialAmount: i, account: acc }]);
+                setSavings(p => [...p, { id: gid, name: n, targetAmount: t, targetType: tt, initialAmount: i, account: acc, startDate: sd, targetDate: td }]);
             }}
           />}
           
-          {activeTab === 'settings' && <SettingsPage users={users} currency={currency} onUpdateUser={handleUpdateUser} onUpdateCurrency={setCurrency} onExport={handleExport} />}
+          {activeTab === 'settings' && (
+            <SettingsPage 
+                users={users} 
+                currency={currency} 
+                theme={theme}
+                onUpdateUser={handleUpdateUser} 
+                onUpdateCurrency={setCurrency} 
+                onUpdateTheme={handleUpdateTheme}
+                onExport={handleExport} 
+            />
+          )}
 
         </div>
       </main>

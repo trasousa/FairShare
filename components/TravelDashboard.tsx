@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { Trip, ExpenseEntry, CurrencyCode } from '../types';
 import { formatCurrency } from '../services/financeService';
 import { Plane, MapPin, Plus, Calendar, AlertCircle } from 'lucide-react';
@@ -13,6 +13,21 @@ interface TravelDashboardProps {
 export const TravelDashboard: React.FC<TravelDashboardProps> = ({ trips, entries, currency, onAddTrip }) => {
   const [isAdding, setIsAdding] = useState(false);
   const [newTrip, setNewTrip] = useState<Partial<Trip>>({ status: 'PLANNED' });
+  const [selectedYear, setSelectedYear] = useState('All'); // State for selected year
+
+  const availableYears = useMemo(() => {
+    const years = new Set<string>();
+    trips.forEach(trip => years.add(new Date(trip.startDate).getFullYear().toString()));
+    return ['All', ...Array.from(years).sort((a, b) => parseInt(b) - parseInt(a))];
+  }, [trips]);
+
+  const filteredTrips = useMemo(() => {
+    if (selectedYear === 'All') {
+      return trips;
+    }
+    return trips.filter(trip => new Date(trip.startDate).getFullYear().toString() === selectedYear);
+  }, [trips, selectedYear]);
+
 
   const getTripExpenses = (tripId: string) => {
       return entries.filter(e => e.tripId === tripId);
@@ -33,16 +48,27 @@ export const TravelDashboard: React.FC<TravelDashboardProps> = ({ trips, entries
 
   return (
     <div className="space-y-6">
-        <div className="flex justify-between items-center">
+        <div className="flex flex-col sm:flex-row justify-between items-center gap-4">
             <h2 className="text-xl font-bold text-slate-800 flex items-center gap-2">
                 <Plane className="text-indigo-600" /> Travel & Adventures
             </h2>
-            <button 
-                onClick={() => setIsAdding(true)}
-                className="flex items-center gap-2 bg-slate-900 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-slate-800 transition"
-            >
-                <Plus size={16} /> Plan New Trip
-            </button>
+            <div className="flex items-center gap-4">
+                <select 
+                    value={selectedYear} 
+                    onChange={e => setSelectedYear(e.target.value)}
+                    className="bg-white border border-slate-300 rounded-lg p-2 text-sm focus:ring-2 focus:ring-indigo-200 outline-none"
+                >
+                    {availableYears.map(year => (
+                        <option key={year} value={year}>{year}</option>
+                    ))}
+                </select>
+                <button 
+                    onClick={() => setIsAdding(true)}
+                    className="flex items-center gap-2 bg-slate-900 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-slate-800 transition"
+                >
+                    <Plus size={16} /> Plan New Trip
+                </button>
+            </div>
         </div>
 
         {isAdding && (
@@ -88,7 +114,7 @@ export const TravelDashboard: React.FC<TravelDashboardProps> = ({ trips, entries
         )}
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {trips.map(trip => {
+            {filteredTrips.map(trip => {
                 const totalSpent = getTripTotal(trip.id);
                 const progress = Math.min((totalSpent / trip.budget) * 100, 100);
                 const expenses = getTripExpenses(trip.id);

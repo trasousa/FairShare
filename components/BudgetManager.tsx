@@ -12,7 +12,7 @@ interface BudgetManagerProps {
   users: Record<string, User>;
   currency: CurrencyCode;
   onAddBudget: (categoryId: string, limit: number, account: AccountType) => void;
-  onAddGoal: (name: string, target: number, targetType: 'FIXED'|'PERCENTAGE', initial: number, account: AccountType) => void;
+  onAddGoal: (name: string, target: number, targetType: 'FIXED'|'PERCENTAGE', initial: number, account: AccountType, startDate?: string, targetDate?: string) => void;
 }
 
 export const BudgetManager: React.FC<BudgetManagerProps> = ({ budgets, categories, savings, entries, totalIncome, users, currency, onAddBudget, onAddGoal }) => {
@@ -27,11 +27,27 @@ export const BudgetManager: React.FC<BudgetManagerProps> = ({ budgets, categorie
   const [goalTarget, setGoalTarget] = useState('');
   const [goalType, setGoalType] = useState<'FIXED' | 'PERCENTAGE'>('FIXED');
   const [goalInitial, setGoalInitial] = useState('');
+  const [goalStartDate, setGoalStartDate] = useState('');
+  const [goalTargetDate, setGoalTargetDate] = useState('');
+  const [selectedYear, setSelectedYear] = useState('All');
 
   const availableCategories = categories.filter(c => 
     c.group !== 'SAVINGS' && c.group !== 'TRAVEL' &&
     !budgets.some(b => b.categoryId === c.id && b.account === selectedAccount)
   );
+
+  const availableYears = useMemo(() => {
+    const years = new Set<string>();
+    savings.forEach(goal => {
+        if (goal.startDate) years.add(new Date(goal.startDate).getFullYear().toString());
+    });
+    return ['All', ...Array.from(years).sort((a, b) => parseInt(b) - parseInt(a))];
+  }, [savings]);
+
+  const filteredSavings = useMemo(() => {
+    if (selectedYear === 'All' || activeTab === 'BUDGETS') return savings;
+    return savings.filter(goal => goal.startDate && new Date(goal.startDate).getFullYear().toString() === selectedYear);
+  }, [savings, selectedYear, activeTab]);
 
   const handleBudgetSubmit = (e: React.FormEvent) => {
       e.preventDefault();
@@ -79,12 +95,14 @@ export const BudgetManager: React.FC<BudgetManagerProps> = ({ budgets, categorie
   const handleGoalSubmit = (e: React.FormEvent) => {
       e.preventDefault();
       if(goalName && goalTarget) {
-          onAddGoal(goalName, parseFloat(goalTarget), goalType, parseFloat(goalInitial) || 0, selectedAccount);
+          onAddGoal(goalName, parseFloat(goalTarget), goalType, parseFloat(goalInitial) || 0, selectedAccount, goalStartDate, goalTargetDate);
           setIsAdding(false);
           setGoalName('');
           setGoalTarget('');
           setGoalInitial('');
           setGoalType('FIXED');
+          setGoalStartDate('');
+          setGoalTargetDate('');
       }
   };
 
@@ -129,6 +147,14 @@ export const BudgetManager: React.FC<BudgetManagerProps> = ({ budgets, categorie
                 <div className="w-full bg-slate-100 h-2.5 rounded-full overflow-hidden">
                     <div className="h-full bg-emerald-500 transition-all duration-500" style={{ width: `${progress}%` }}></div>
                 </div>
+                {(goal.startDate || goal.targetDate) && (
+                    <div className="mt-3 flex items-center gap-2 text-[10px] text-slate-400">
+                        <Calendar size={12} />
+                        {goal.startDate && <span>{new Date(goal.startDate).toLocaleDateString()}</span>}
+                        {goal.startDate && goal.targetDate && <span>→</span>}
+                        {goal.targetDate && <span>{new Date(goal.targetDate).toLocaleDateString()}</span>}
+                    </div>
+                )}
               </div>
               <div className="mt-4 pt-3 border-t border-slate-50 flex justify-between items-center">
                    <span className="text-xs text-slate-400">Total Collected</span>
@@ -160,12 +186,23 @@ export const BudgetManager: React.FC<BudgetManagerProps> = ({ budgets, categorie
                  {activeTab === 'BUDGETS' ? <Target className="text-indigo-600" /> : <PiggyBank className="text-indigo-600" />}
                  {activeTab === 'BUDGETS' ? 'Budget Rules' : 'Financial Goals'}
              </h3>
-             <button 
-                onClick={() => setIsAdding(!isAdding)}
-                className="flex items-center gap-2 bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-indigo-700 transition shadow-sm"
-            >
-                {isAdding ? <><X size={16}/> Cancel</> : <><Plus size={16}/> New {activeTab === 'BUDGETS' ? 'Budget' : 'Goal'}</>}
-            </button>
+             <div className="flex items-center gap-4">
+                {activeTab === 'GOALS' && availableYears.length > 1 && (
+                    <select 
+                        value={selectedYear} 
+                        onChange={e => setSelectedYear(e.target.value)}
+                        className="bg-white border border-slate-300 rounded-lg p-2 text-sm focus:ring-2 focus:ring-indigo-200 outline-none"
+                    >
+                        {availableYears.map(year => <option key={year} value={year}>{year}</option>)}
+                    </select>
+                )}
+                <button 
+                    onClick={() => setIsAdding(!isAdding)}
+                    className="flex items-center gap-2 bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-indigo-700 transition shadow-sm"
+                >
+                    {isAdding ? <><X size={16}/> Cancel</> : <><Plus size={16}/> New {activeTab === 'BUDGETS' ? 'Budget' : 'Goal'}</>}
+                </button>
+             </div>
         </div>
 
         {isAdding && (
@@ -228,6 +265,18 @@ export const BudgetManager: React.FC<BudgetManagerProps> = ({ budgets, categorie
                              <label className="block text-xs font-semibold text-slate-500 mb-1">Starting Balance</label>
                              <input type="number" value={goalInitial} onChange={e => setGoalInitial(e.target.value)} className="w-full text-sm border border-slate-300 rounded-lg p-2.5 outline-none" placeholder="0.00" />
                         </div>
+
+                        <div className="grid grid-cols-2 gap-4">
+                            <div>
+                                <label className="block text-xs font-semibold text-slate-500 mb-1">Start Date</label>
+                                <input type="date" value={goalStartDate} onChange={e => setGoalStartDate(e.target.value)} className="w-full text-sm border border-slate-300 rounded-lg p-2.5 outline-none" />
+                            </div>
+                            <div>
+                                <label className="block text-xs font-semibold text-slate-500 mb-1">Target Date</label>
+                                <input type="date" value={goalTargetDate} onChange={e => setGoalTargetDate(e.target.value)} className="w-full text-sm border border-slate-300 rounded-lg p-2.5 outline-none" />
+                            </div>
+                        </div>
+
                         <button type="submit" className="col-span-1 md:col-span-2 w-full bg-slate-900 text-white text-sm font-medium py-3 rounded-lg hover:bg-slate-800 transition">Create Goal</button>
                      </form>
                  )}
@@ -255,12 +304,12 @@ export const BudgetManager: React.FC<BudgetManagerProps> = ({ budgets, categorie
             </div>
         ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {savings.map(renderGoalCard)}
-                {savings.length === 0 && (
+                {filteredSavings.map(renderGoalCard)}
+                {filteredSavings.length === 0 && (
                     <div className="col-span-3 text-center py-12 bg-slate-50 rounded-xl border border-dashed border-slate-300">
                         <PiggyBank className="mx-auto text-slate-300 mb-4" size={48} />
-                        <h3 className="text-lg font-semibold text-slate-500">No Goals Yet</h3>
-                        <p className="text-slate-400 text-sm">Create a savings goal to start tracking your wealth.</p>
+                        <h3 className="text-lg font-semibold text-slate-500">No Goals Found</h3>
+                        <p className="text-slate-400 text-sm">Create a savings goal or adjust your filter to start tracking.</p>
                     </div>
                 )}
             </div>

@@ -54,6 +54,8 @@ export interface SavingsGoal {
   targetAmount: number; // If fixed, this is the value. If percentage, this is the % (e.g., 20)
   targetType: 'FIXED' | 'PERCENTAGE';
   account: AccountType;
+  startDate?: string; // Optional start date for the goal
+  targetDate?: string; // Optional target completion date
 }
 
 export interface MonthData {
@@ -78,6 +80,7 @@ export interface AppInstance {
     created: number;
     lastAccessed: number;
     currency: CurrencyCode;
+    theme?: 'light' | 'dark';
     users: Record<string, User>;
     data: {
         entries: ExpenseEntry[];
