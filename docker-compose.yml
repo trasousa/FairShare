@@ -7,6 +7,9 @@ services:
     container_name: fairshare
     ports:
       - "3005:3000"
+    environment:
+      - DB_PATH=/app/data/fairshare.db
     volumes:
-      - ./fairshare-data:/app/data
+      - /mnt/storage/containers/fairshare/data:/app/data
+      - /etc/localtime:/etc/localtime:ro
     restart: unless-stopped
