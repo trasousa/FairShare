@@ -229,6 +229,9 @@ export const TravelDashboard: React.FC<TravelDashboardProps> = ({ trips, entries
                     return renderTripCard(destTrips[0]);
                 }
 
+                // Calculate Stack Totals
+                const stackTotalBudget = destTrips.reduce((sum, t) => sum + t.budget, 0);
+
                 return (
                     <div key={destination} className="relative">
                         {/* Stacked Effect Backgrounds */}
@@ -253,15 +256,18 @@ export const TravelDashboard: React.FC<TravelDashboardProps> = ({ trips, entries
                         ) : (
                             <div 
                                 onClick={() => setExpandedDestination(destination)}
-                                className="relative z-20 bg-white rounded-xl border border-slate-200 shadow-md p-6 flex flex-col items-center justify-center min-h-[250px] cursor-pointer hover:shadow-lg hover:-translate-y-1 transition group"
+                                className="relative z-20 bg-slate-50 rounded-xl border border-slate-200 shadow-md p-6 flex flex-col items-center justify-center min-h-[180px] cursor-pointer hover:shadow-lg hover:-translate-y-1 transition group"
                             >
-                                <div className="w-16 h-16 bg-indigo-50 text-indigo-600 rounded-full flex items-center justify-center mb-4 group-hover:bg-indigo-100 transition">
-                                    <Layers size={32} />
+                                <div className="absolute top-3 right-3 bg-indigo-100 text-indigo-700 text-xs font-bold px-2 py-1 rounded-full">
+                                    {destTrips.length}
                                 </div>
-                                <h3 className="text-xl font-bold text-slate-800 text-center">{destination}</h3>
-                                <p className="text-indigo-600 font-medium text-sm mt-1">{destTrips.length} Trips</p>
-                                <div className="mt-6 flex items-center gap-1 text-xs text-slate-400">
-                                    <ChevronDown size={14} /> Click to expand
+                                <div className="w-12 h-12 bg-white text-indigo-600 rounded-full flex items-center justify-center mb-3 shadow-sm border border-slate-100 group-hover:scale-110 transition">
+                                    <Layers size={24} />
+                                </div>
+                                <h3 className="text-lg font-bold text-slate-800 text-center">{destination}</h3>
+                                <p className="text-slate-500 text-xs mt-1">Total Budget: {formatCurrency(stackTotalBudget, currency)}</p>
+                                <div className="mt-4 flex items-center gap-1 text-[10px] text-indigo-500 font-medium opacity-0 group-hover:opacity-100 transition-opacity">
+                                    <ChevronDown size={12} /> View Trips
                                 </div>
                             </div>
                         )}
@@ -269,10 +275,10 @@ export const TravelDashboard: React.FC<TravelDashboardProps> = ({ trips, entries
                 );
             })}
             
-            <div className="bg-indigo-900 text-white rounded-xl shadow-lg p-6 flex flex-col justify-center">
-                <div className="w-12 h-12 bg-white/10 rounded-full flex items-center justify-center mb-4 text-2xl">✈️</div>
-                <h3 className="text-lg font-bold mb-2">Travel Smart</h3>
-                <p className="text-indigo-200 text-sm leading-relaxed">
+            <div className="bg-indigo-900 text-white rounded-xl shadow-lg p-6 flex flex-col justify-center min-h-[180px]">
+                <div className="w-10 h-10 bg-white/10 rounded-full flex items-center justify-center mb-3 text-xl">✈️</div>
+                <h3 className="text-base font-bold mb-2">Travel Smart</h3>
+                <p className="text-indigo-200 text-xs leading-relaxed">
                     Create a trip to track expenses separate from your monthly budget. Assign expenses to categories like Flight or Food to see exactly where your vacation money goes.
                 </p>
             </div>

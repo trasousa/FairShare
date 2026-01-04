@@ -16,6 +16,10 @@ interface MonthlyDashboardProps {
 }
 
 export const MonthlyDashboard: React.FC<MonthlyDashboardProps> = ({ entries, budgets, categories, savings, incomes, users, currency, currentMonth }) => {
+  if (!users.user_1 || !users.user_2) {
+      return <div className="p-8 text-center text-slate-400">Loading user data...</div>;
+  }
+
   const monthLabel = new Date(currentMonth).toLocaleString('default', { month: 'long', year: 'numeric' });
 
   const monthlyEntries = useMemo(() => 

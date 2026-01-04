@@ -14,6 +14,8 @@ interface IncomeManagerProps {
 }
 
 export const IncomeManager: React.FC<IncomeManagerProps> = ({ incomes, currentMonth, users, currency, onAddIncome, onDeleteIncome }) => {
+  if (!users.user_1 || !users.user_2) return <div>Loading users...</div>;
+
   const [source, setSource] = useState('');
   const [amount, setAmount] = useState('');
   const [recipient, setRecipient] = useState<AccountType>('USER_1');

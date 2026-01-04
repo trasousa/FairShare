@@ -16,6 +16,8 @@ interface BudgetManagerProps {
 }
 
 export const BudgetManager: React.FC<BudgetManagerProps> = ({ budgets, categories, savings, entries, totalIncome, users, currency, onAddBudget, onAddGoal }) => {
+  if (!users.user_1 || !users.user_2) return <div>Loading users...</div>;
+
   const [activeTab, setActiveTab] = useState<'BUDGETS' | 'GOALS'>('BUDGETS');
   const [isAdding, setIsAdding] = useState(false);
   
