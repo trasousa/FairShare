@@ -3,6 +3,7 @@ import ReactDOM from 'react-dom/client';
 import App from './App';
 import { LandingPage } from './components/LandingPage';
 import { Onboarding } from './components/Onboarding';
+import { ErrorBoundary } from './components/ErrorBoundary';
 
 const Root = () => {
     const [view, setView] = useState<'LANDING' | 'ONBOARDING' | 'APP'>('LANDING');
@@ -28,14 +29,26 @@ const Root = () => {
     };
 
     if (view === 'APP' && activeInstanceId) {
-        return <App instanceId={activeInstanceId} onExit={handleExitApp} />;
+        return (
+            <ErrorBoundary componentName="App">
+                <App instanceId={activeInstanceId} onExit={handleExitApp} />
+            </ErrorBoundary>
+        );
     }
 
     if (view === 'ONBOARDING') {
-        return <Onboarding onComplete={handleOnboardingComplete} onCancel={() => setView('LANDING')} />;
+        return (
+            <ErrorBoundary componentName="Onboarding">
+                <Onboarding onComplete={handleOnboardingComplete} onCancel={() => setView('LANDING')} />
+            </ErrorBoundary>
+        );
     }
 
-    return <LandingPage onSelectInstance={handleSelectInstance} onCreateNew={handleCreateNew} />;
+    return (
+        <ErrorBoundary componentName="LandingPage">
+            <LandingPage onSelectInstance={handleSelectInstance} onCreateNew={handleCreateNew} />
+        </ErrorBoundary>
+    );
 };
 
 const rootElement = document.getElementById('root');

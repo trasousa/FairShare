@@ -103,6 +103,8 @@ export const DashboardCharts: React.FC<DashboardChartsProps> = ({ entries, categ
       };
   });
 
+  const totalAccumulatedWealth = wealthData.length > 0 ? wealthData[wealthData.length - 1].totalWealth : 0;
+
   const catMap = new Map<string, number>();
   entries.forEach(entry => {
       const cat = categories.find(c => c.id === entry.categoryId);
@@ -263,7 +265,7 @@ export const DashboardCharts: React.FC<DashboardChartsProps> = ({ entries, categ
                     </ResponsiveContainer>
                 </div>
                 <div className="mt-4 pt-4 border-t border-slate-50 text-center">
-                    <span className="text-2xl font-bold text-emerald-600">{formatCurrency(runningWealth, currency)}</span>
+                    <span className="text-2xl font-bold text-emerald-600">{formatCurrency(totalAccumulatedWealth, currency)}</span>
                     <span className="text-xs text-slate-400 block">Total Accumulated</span>
                 </div>
             </div>

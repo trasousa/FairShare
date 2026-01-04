@@ -27,7 +27,7 @@ import { TravelDashboard } from './components/TravelDashboard';
 import { IncomeManager } from './components/IncomeManager';
 import { SettingsPage } from './components/SettingsPage';
 import { MonthPicker } from './components/MonthPicker';
-import { ErrorBoundary } from './components/ErrorBoundary'; // Import ErrorBoundary
+import { ErrorBoundary } from './components/ErrorBoundary'; 
 import { getInstance, saveInstance } from './services/storage';
 
 type MainTab = 'insights' | 'register' | 'planning' | 'settings';
@@ -231,8 +231,6 @@ function App({ instanceId, onExit }: AppProps) {
         isOpen={isMonthPickerOpen} onClose={() => setIsMonthPickerOpen(false)} 
         currentMonthId={currentMonth} onSelect={setCurrentMonth}
       />
-
-      {sidebarOpen && <div className="fixed inset-0 bg-black/50 z-40 lg:hidden" onClick={() => setSidebarOpen(false)} />}
 
       {/* Top Navigation (Desktop) */}
       <header className={`fixed top-0 left-0 right-0 h-16 border-b px-4 lg:px-8 flex items-center justify-between z-40 ${navBarClass}`}>
