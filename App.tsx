@@ -184,22 +184,25 @@ function App({ instanceId, onExit }: AppProps) {
       document.body.removeChild(link);
   };
 
-  const filteredDashboardEntries = useMemo(() => {
+  const filterByDate = (dateStr: string) => {
     const now = new Date();
     now.setHours(23, 59, 59, 999);
-    return entries.filter(e => {
-        const [eYear, eMonth] = e.monthId.split('-').map(Number);
-        const entryDate = new Date(eYear, eMonth - 1, 1);
-        switch (dashboardRange) {
-            case 'THIS_MONTH': return eYear === now.getFullYear() && (eMonth - 1) === now.getMonth();
-            case 'LAST_3_MONTHS': return entryDate >= new Date(now.getFullYear(), now.getMonth() - 2, 1) && entryDate <= now;
-            case 'LAST_6_MONTHS': return entryDate >= new Date(now.getFullYear(), now.getMonth() - 5, 1) && entryDate <= now;
-            case 'THIS_YEAR': return eYear === now.getFullYear();
-            case 'ALL_TIME': return true;
-            default: return true;
-        }
-    });
-  }, [entries, dashboardRange]);
+    const [year, month] = dateStr.split('-').map(Number);
+    const entryDate = new Date(year, month - 1, 1);
+    
+    switch (dashboardRange) {
+        case 'THIS_MONTH': return year === now.getFullYear() && (month - 1) === now.getMonth();
+        case 'LAST_3_MONTHS': return entryDate >= new Date(now.getFullYear(), now.getMonth() - 2, 1) && entryDate <= now;
+        case 'LAST_6_MONTHS': return entryDate >= new Date(now.getFullYear(), now.getMonth() - 5, 1) && entryDate <= now;
+        case 'LAST_12_MONTHS': return entryDate >= new Date(now.getFullYear(), now.getMonth() - 11, 1) && entryDate <= now;
+        case 'THIS_YEAR': return year === now.getFullYear();
+        case 'ALL_TIME': return true;
+        default: return true;
+    }
+  };
+
+  const filteredDashboardEntries = useMemo(() => entries.filter(e => filterByDate(e.monthId)), [entries, dashboardRange]);
+  const filteredDashboardIncomes = useMemo(() => incomes.filter(i => filterByDate(i.monthId)), [incomes, dashboardRange]);
 
   if (loading) return <div className="min-h-screen flex items-center justify-center bg-slate-100 text-slate-400">Loading Database...</div>;
 
@@ -316,6 +319,7 @@ function App({ instanceId, onExit }: AppProps) {
                       <option value="THIS_MONTH">This Month</option>
                       <option value="LAST_3_MONTHS">Last 3 Months</option>
                       <option value="LAST_6_MONTHS">Last 6 Months</option>
+                      <option value="LAST_12_MONTHS">Last 12 Months</option>
                       <option value="THIS_YEAR">This Year</option>
                       <option value="ALL_TIME">All Time</option>
                     </select>
@@ -336,7 +340,7 @@ function App({ instanceId, onExit }: AppProps) {
 
         <div className="p-4 lg:p-8 max-w-7xl mx-auto w-full space-y-6">
           
-          {activeTab === 'overview' && <DashboardCharts entries={filteredDashboardEntries} categories={categories} incomes={incomes} users={users} currency={currency} />}
+          {activeTab === 'overview' && <DashboardCharts entries={filteredDashboardEntries} categories={categories} incomes={filteredDashboardIncomes} users={users} currency={currency} />}
 
           {activeTab === 'monthly' && <MonthlyDashboard currentMonth={currentMonth} entries={entries} budgets={budgets} categories={categories} savings={savings} incomes={incomes} users={users} currency={currency} />}
 

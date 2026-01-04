@@ -1,7 +1,7 @@
 export type UserId = 'user_1' | 'user_2';
 export type AccountType = 'SHARED' | 'USER_1' | 'USER_2';
 export type SplitType = 'DYNAMIC' | 'EQUAL' | 'PERSONAL';
-export type TimeRange = 'THIS_MONTH' | 'LAST_3_MONTHS' | 'LAST_6_MONTHS' | 'THIS_YEAR' | 'ALL_TIME';
+export type TimeRange = 'THIS_MONTH' | 'LAST_3_MONTHS' | 'LAST_6_MONTHS' | 'LAST_12_MONTHS' | 'THIS_YEAR' | 'ALL_TIME';
 export type CurrencyCode = 'USD' | 'EUR' | 'GBP' | 'JPY' | 'BRL';
 
 export interface User {
