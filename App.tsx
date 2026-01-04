@@ -190,19 +190,26 @@ function App({ instanceId, onExit }: AppProps) {
   };
 
   const filterByDate = (dateStr: string) => {
-    const now = new Date();
-    now.setHours(23, 59, 59, 999);
-    const [year, month] = dateStr.split('-').map(Number);
-    const entryDate = new Date(year, month - 1, 1);
-    
-    switch (dashboardRange) {
-        case 'THIS_MONTH': return year === now.getFullYear() && (month - 1) === now.getMonth();
-        case 'LAST_3_MONTHS': return entryDate >= new Date(now.getFullYear(), now.getMonth() - 2, 1) && entryDate <= now;
-        case 'LAST_6_MONTHS': return entryDate >= new Date(now.getFullYear(), now.getMonth() - 5, 1) && entryDate <= now;
-        case 'LAST_12_MONTHS': return entryDate >= new Date(now.getFullYear(), now.getMonth() - 11, 1) && entryDate <= now;
-        case 'THIS_YEAR': return year === now.getFullYear();
-        case 'ALL_TIME': return true;
-        default: return true;
+    if (!dateStr) return false;
+    try {
+        const now = new Date();
+        now.setHours(23, 59, 59, 999);
+        const [year, month] = dateStr.split('-').map(Number);
+        if (!year || !month) return false;
+        
+        const entryDate = new Date(year, month - 1, 1);
+        
+        switch (dashboardRange) {
+            case 'THIS_MONTH': return year === now.getFullYear() && (month - 1) === now.getMonth();
+            case 'LAST_3_MONTHS': return entryDate >= new Date(now.getFullYear(), now.getMonth() - 2, 1) && entryDate <= now;
+            case 'LAST_6_MONTHS': return entryDate >= new Date(now.getFullYear(), now.getMonth() - 5, 1) && entryDate <= now;
+            case 'LAST_12_MONTHS': return entryDate >= new Date(now.getFullYear(), now.getMonth() - 11, 1) && entryDate <= now;
+            case 'THIS_YEAR': return year === now.getFullYear();
+            case 'ALL_TIME': return true;
+            default: return true;
+        }
+    } catch (e) {
+        return false;
     }
   };
 

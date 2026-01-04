@@ -47,7 +47,6 @@ export const DashboardCharts: React.FC<DashboardChartsProps> = ({ entries, categ
       SAVINGS: number, SAVINGS_U1: number, SAVINGS_U2: number, SAVINGS_SHARED: number 
   }>();
   
-  // Initialize map with all relevant months
   const allMonths = new Set([...incomes.map(i => i.monthId), ...entries.map(e => e.monthId)]);
   allMonths.forEach(m => {
       monthMap.set(m, { 
@@ -75,7 +74,9 @@ export const DashboardCharts: React.FC<DashboardChartsProps> = ({ entries, categ
               else if (entry.account === 'USER_2') data.SAVINGS_U2 += entry.amount;
               else data.SAVINGS_SHARED += entry.amount;
           } else {
-              data[entry.account] += entry.amount;
+              if (data[entry.account] !== undefined) {
+                  data[entry.account] += entry.amount;
+              }
           }
       }
   });
@@ -118,13 +119,14 @@ export const DashboardCharts: React.FC<DashboardChartsProps> = ({ entries, categ
 
   const COLORS = ['#6366f1', '#ec4899', '#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4', '#f97316', '#84cc16'];
 
-  // --- Totals for Summary Cards ---
   const totals = useMemo(() => {
       const t = { SHARED: 0, USER_1: 0, USER_2: 0 };
       entries.forEach(e => {
           const cat = categories.find(c => c.id === e.categoryId);
           if (cat?.group !== 'SAVINGS') {
-              t[e.account] += e.amount;
+              if (t[e.account] !== undefined) {
+                  t[e.account] += e.amount;
+              }
           }
       });
       return t;
@@ -204,7 +206,6 @@ export const DashboardCharts: React.FC<DashboardChartsProps> = ({ entries, categ
   return (
     <div className="space-y-6">
         
-        {/* Expense Summary Cards */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex items-center justify-between">
                 <div><p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Total Shared</p><p className="text-xl font-bold text-slate-800">{formatCurrency(totals.SHARED, currency)}</p></div>
@@ -231,13 +232,10 @@ export const DashboardCharts: React.FC<DashboardChartsProps> = ({ entries, categ
                             <YAxis axisLine={false} tickLine={false} tick={{fill: '#64748b', fontSize: 12}} tickFormatter={(val) => `${val/1000}k`} />
                             <Tooltip contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }} cursor={{fill: '#f8fafc'}} />
                             <Legend iconType="circle" onClick={(e) => handleLegendClick(e.dataKey)} cursor="pointer" />
-                            
-                            {/* SEPARATE COLUMNS: Income vs Expenses */}
-                            <Bar dataKey="INCOME" name="Total Income" stackId="income" fill="#10b981" radius={[4, 4, 0, 0]} barSize={12} hide={!visibleBars.INCOME} />
-                            
-                            <Bar dataKey="SHARED" name="Shared Exp" stackId="expenses" fill="#a855f7" radius={[0, 0, 0, 0]} hide={!visibleBars.SHARED} />
-                            <Bar dataKey="USER_1" name={`${users.user_1.name} Exp`} stackId="expenses" fill="#3b82f6" radius={[0, 0, 0, 0]} hide={!visibleBars.USER_1} />
-                            <Bar dataKey="USER_2" name={`${users.user_2.name} Exp`} stackId="expenses" fill="#ec4899" radius={[4, 4, 0, 0]} hide={!visibleBars.USER_2} />
+                            <Bar dataKey="INCOME" name="Total Income" fill="#10b981" radius={[4, 4, 0, 0]} barSize={12} hide={!visibleBars.INCOME} />
+                            <Bar dataKey="SHARED" name="Shared Exp" stackId="exp" fill="#a855f7" radius={[0, 0, 0, 0]} hide={!visibleBars.SHARED} />
+                            <Bar dataKey="USER_1" name={`${users.user_1.name} Exp`} stackId="exp" fill="#3b82f6" radius={[0, 0, 0, 0]} hide={!visibleBars.USER_1} />
+                            <Bar dataKey="USER_2" name={`${users.user_2.name} Exp`} stackId="exp" fill="#ec4899" radius={[4, 4, 0, 0]} hide={!visibleBars.USER_2} />
                         </BarChart>
                     </ResponsiveContainer>
                 </div>
@@ -258,8 +256,6 @@ export const DashboardCharts: React.FC<DashboardChartsProps> = ({ entries, categ
                             <XAxis dataKey="month" hide />
                             <YAxis axisLine={false} tickLine={false} tick={{fontSize: 10}} domain={['auto', 'auto']} />
                             <Tooltip formatter={(value: number) => formatCurrency(value, currency)} />
-                            
-                            {/* Stacked Areas for Individual Contributions */}
                             <Area type="monotone" dataKey="wealthShared" name="Shared Wealth" stackId="1" stroke="#a855f7" strokeWidth={2} fillOpacity={1} fill="url(#colorShared)" />
                             <Area type="monotone" dataKey="wealthU1" name={`${users.user_1.name} Wealth`} stackId="1" stroke="#3b82f6" strokeWidth={2} fillOpacity={1} fill="url(#colorU1)" />
                             <Area type="monotone" dataKey="wealthU2" name={`${users.user_2.name} Wealth`} stackId="1" stroke="#ec4899" strokeWidth={2} fillOpacity={1} fill="url(#colorU2)" />
