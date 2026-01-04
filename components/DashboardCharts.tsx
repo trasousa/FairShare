@@ -40,11 +40,22 @@ export const DashboardCharts: React.FC<DashboardChartsProps> = ({ entries, categ
   }
 
   // --- Data Processing for Charts ---
-  const monthMap = new Map<string, { month: string, SHARED: number, USER_1: number, USER_2: number, INCOME: number, SAVINGS: number }>();
+  const monthMap = new Map<string, { 
+      month: string, 
+      SHARED: number, USER_1: number, USER_2: number, 
+      INCOME: number, 
+      SAVINGS: number, SAVINGS_U1: number, SAVINGS_U2: number, SAVINGS_SHARED: number 
+  }>();
   
+  // Initialize map with all relevant months
   const allMonths = new Set([...incomes.map(i => i.monthId), ...entries.map(e => e.monthId)]);
   allMonths.forEach(m => {
-      monthMap.set(m, { month: m, SHARED: 0, USER_1: 0, USER_2: 0, INCOME: 0, SAVINGS: 0 });
+      monthMap.set(m, { 
+          month: m, 
+          SHARED: 0, USER_1: 0, USER_2: 0, 
+          INCOME: 0, 
+          SAVINGS: 0, SAVINGS_U1: 0, SAVINGS_U2: 0, SAVINGS_SHARED: 0 
+      });
   });
 
   incomes.forEach(inc => {
@@ -60,6 +71,9 @@ export const DashboardCharts: React.FC<DashboardChartsProps> = ({ entries, categ
           const cat = categories.find(c => c.id === entry.categoryId);
           if (cat?.group === 'SAVINGS') {
               data.SAVINGS += entry.amount;
+              if (entry.account === 'USER_1') data.SAVINGS_U1 += entry.amount;
+              else if (entry.account === 'USER_2') data.SAVINGS_U2 += entry.amount;
+              else data.SAVINGS_SHARED += entry.amount;
           } else {
               data[entry.account] += entry.amount;
           }
@@ -68,12 +82,22 @@ export const DashboardCharts: React.FC<DashboardChartsProps> = ({ entries, categ
 
   const barData = Array.from(monthMap.values()).sort((a, b) => a.month.localeCompare(b.month));
 
-  let runningWealth = 0;
+  // --- Wealth Calculation ---
+  let wealthU1 = 0;
+  let wealthU2 = 0;
+  let wealthShared = 0;
+
   const wealthData = barData.map(item => {
-      runningWealth += item.SAVINGS;
+      wealthU1 += item.SAVINGS_U1;
+      wealthU2 += item.SAVINGS_U2;
+      wealthShared += item.SAVINGS_SHARED;
+      
       return {
           month: item.month,
-          wealth: runningWealth,
+          totalWealth: wealthU1 + wealthU2 + wealthShared,
+          wealthU1,
+          wealthU2,
+          wealthShared,
           monthlySave: item.SAVINGS
       };
   });
@@ -94,6 +118,7 @@ export const DashboardCharts: React.FC<DashboardChartsProps> = ({ entries, categ
 
   const COLORS = ['#6366f1', '#ec4899', '#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4', '#f97316', '#84cc16'];
 
+  // --- Totals for Summary Cards ---
   const totals = useMemo(() => {
       const t = { SHARED: 0, USER_1: 0, USER_2: 0 };
       entries.forEach(e => {
@@ -106,8 +131,6 @@ export const DashboardCharts: React.FC<DashboardChartsProps> = ({ entries, categ
   }, [entries, categories]);
 
   // --- Grouping Logic ---
-  
-  // Helper for grouping
   const groupEntries = (filteredEntries: ExpenseEntry[], groupBy: 'CATEGORY' | 'CONSECUTIVE') => {
       if (groupBy === 'CATEGORY') {
           const map = new Map<string, { key: string, name: string, amount: number, account: AccountType, count: number, entries: ExpenseEntry[] }>();
@@ -124,7 +147,6 @@ export const DashboardCharts: React.FC<DashboardChartsProps> = ({ entries, categ
           });
           return Array.from(map.values()).sort((a, b) => b.amount - a.amount);
       } else {
-          // Consecutive Logic
           const sorted = [...filteredEntries].sort((a, b) => b.monthId.localeCompare(a.monthId));
           const groups: { key: string, name: string, amount: number, total: number, entries: ExpenseEntry[], account: AccountType }[] = [];
           if (sorted.length === 0) return [];
@@ -182,6 +204,7 @@ export const DashboardCharts: React.FC<DashboardChartsProps> = ({ entries, categ
   return (
     <div className="space-y-6">
         
+        {/* Expense Summary Cards */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex items-center justify-between">
                 <div><p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Total Shared</p><p className="text-xl font-bold text-slate-800">{formatCurrency(totals.SHARED, currency)}</p></div>
@@ -208,11 +231,13 @@ export const DashboardCharts: React.FC<DashboardChartsProps> = ({ entries, categ
                             <YAxis axisLine={false} tickLine={false} tick={{fill: '#64748b', fontSize: 12}} tickFormatter={(val) => `${val/1000}k`} />
                             <Tooltip contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }} cursor={{fill: '#f8fafc'}} />
                             <Legend iconType="circle" onClick={(e) => handleLegendClick(e.dataKey)} cursor="pointer" />
-                            <Bar dataKey="INCOME" name="Total Income" fill="#10b981" radius={[4, 4, 0, 0]} barSize={12} hide={!visibleBars.INCOME} />
-                            {/* Removed stackId for expense bars to prevent overlapping with income if needed, or keep stackId="exp" to stack them together separate from income */}
-                            <Bar dataKey="SHARED" name="Shared Exp" stackId="exp" fill="#a855f7" radius={[0, 0, 0, 0]} hide={!visibleBars.SHARED} />
-                            <Bar dataKey="USER_1" name={`${users.user_1.name} Exp`} stackId="exp" fill="#3b82f6" radius={[0, 0, 0, 0]} hide={!visibleBars.USER_1} />
-                            <Bar dataKey="USER_2" name={`${users.user_2.name} Exp`} stackId="exp" fill="#ec4899" radius={[4, 4, 0, 0]} hide={!visibleBars.USER_2} />
+                            
+                            {/* SEPARATE COLUMNS: Income vs Expenses */}
+                            <Bar dataKey="INCOME" name="Total Income" stackId="income" fill="#10b981" radius={[4, 4, 0, 0]} barSize={12} hide={!visibleBars.INCOME} />
+                            
+                            <Bar dataKey="SHARED" name="Shared Exp" stackId="expenses" fill="#a855f7" radius={[0, 0, 0, 0]} hide={!visibleBars.SHARED} />
+                            <Bar dataKey="USER_1" name={`${users.user_1.name} Exp`} stackId="expenses" fill="#3b82f6" radius={[0, 0, 0, 0]} hide={!visibleBars.USER_1} />
+                            <Bar dataKey="USER_2" name={`${users.user_2.name} Exp`} stackId="expenses" fill="#ec4899" radius={[4, 4, 0, 0]} hide={!visibleBars.USER_2} />
                         </BarChart>
                     </ResponsiveContainer>
                 </div>
@@ -225,16 +250,19 @@ export const DashboardCharts: React.FC<DashboardChartsProps> = ({ entries, categ
                     <ResponsiveContainer width="100%" height="100%">
                         <AreaChart data={wealthData} margin={{ top: 10, right: 0, left: -20, bottom: 0 }}>
                             <defs>
-                                <linearGradient id="colorWealth" x1="0" y1="0" x2="0" y2="1">
-                                    <stop offset="5%" stopColor="#059669" stopOpacity={0.2}/>
-                                    <stop offset="95%" stopColor="#059669" stopOpacity={0}/>
-                                </linearGradient>
+                                <linearGradient id="colorU1" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#3b82f6" stopOpacity={0.2}/><stop offset="95%" stopColor="#3b82f6" stopOpacity={0}/></linearGradient>
+                                <linearGradient id="colorU2" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#ec4899" stopOpacity={0.2}/><stop offset="95%" stopColor="#ec4899" stopOpacity={0}/></linearGradient>
+                                <linearGradient id="colorShared" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#a855f7" stopOpacity={0.2}/><stop offset="95%" stopColor="#a855f7" stopOpacity={0}/></linearGradient>
                             </defs>
                             <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
                             <XAxis dataKey="month" hide />
                             <YAxis axisLine={false} tickLine={false} tick={{fontSize: 10}} domain={['auto', 'auto']} />
                             <Tooltip formatter={(value: number) => formatCurrency(value, currency)} />
-                            <Area type="monotone" dataKey="wealth" stroke="#059669" strokeWidth={3} fillOpacity={1} fill="url(#colorWealth)" />
+                            
+                            {/* Stacked Areas for Individual Contributions */}
+                            <Area type="monotone" dataKey="wealthShared" name="Shared Wealth" stackId="1" stroke="#a855f7" strokeWidth={2} fillOpacity={1} fill="url(#colorShared)" />
+                            <Area type="monotone" dataKey="wealthU1" name={`${users.user_1.name} Wealth`} stackId="1" stroke="#3b82f6" strokeWidth={2} fillOpacity={1} fill="url(#colorU1)" />
+                            <Area type="monotone" dataKey="wealthU2" name={`${users.user_2.name} Wealth`} stackId="1" stroke="#ec4899" strokeWidth={2} fillOpacity={1} fill="url(#colorU2)" />
                         </AreaChart>
                     </ResponsiveContainer>
                 </div>
@@ -258,8 +286,8 @@ export const DashboardCharts: React.FC<DashboardChartsProps> = ({ entries, categ
                                     data={pieData} 
                                     cx="50%" 
                                     cy="50%" 
-                                    innerRadius={50} 
-                                    outerRadius={70} 
+                                    innerRadius={60} 
+                                    outerRadius={80} 
                                     paddingAngle={4} 
                                     dataKey="value"
                                     cornerRadius={4}
@@ -353,7 +381,7 @@ export const DashboardCharts: React.FC<DashboardChartsProps> = ({ entries, categ
                                              <div className="text-xs font-bold text-slate-300 w-4">#{idx+1}</div>
                                              <div>
                                                  <span className="block text-sm font-semibold text-slate-700">
-                                                     {group.name} {count > 1 && <span className="text-xs font-normal text-slate-400 ml-1">(x{count})</span>}
+                                                     {group.catName} {count > 1 && <span className="text-xs font-normal text-slate-400 ml-1">(x{count})</span>}
                                                  </span>
                                                  <div className="flex items-center mt-0.5">
                                                      {renderAccountLabel(group.account)}
