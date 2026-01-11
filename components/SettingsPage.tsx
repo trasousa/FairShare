@@ -41,6 +41,67 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ users, currency, the
       return PRESET_COLORS.filter(c => !usedColors.includes(c));
   };
 
+  const AVATAR_OPTIONS = {
+    People: [
+        'https://api.dicebear.com/7.x/avataaars/svg?seed=Felix',
+        'https://api.dicebear.com/7.x/avataaars/svg?seed=Aneka',
+        'https://api.dicebear.com/7.x/avataaars/svg?seed=Jasper',
+        'https://api.dicebear.com/7.x/avataaars/svg?seed=Milo',
+        'https://api.dicebear.com/7.x/avataaars/svg?seed=Luna'
+    ],
+    Animals: [
+        'https://api.dicebear.com/7.x/adventurer/svg?seed=Bear',
+        'https://api.dicebear.com/7.x/adventurer/svg?seed=Fox',
+        'https://api.dicebear.com/7.x/adventurer/svg?seed=Owl',
+        'https://api.dicebear.com/7.x/adventurer/svg?seed=Cat',
+        'https://api.dicebear.com/7.x/adventurer/svg?seed=Dog'
+    ],
+    Plants: [
+        'https://api.dicebear.com/7.x/bottts/svg?seed=Flower',
+        'https://api.dicebear.com/7.x/bottts/svg?seed=Leaf',
+        'https://api.dicebear.com/7.x/bottts/svg?seed=Tree',
+        'https://api.dicebear.com/7.x/bottts/svg?seed=Cactus',
+        'https://api.dicebear.com/7.x/bottts/svg?seed=Sprout'
+    ]
+  };
+
+  const renderAvatarPicker = (id: UserId, currentAvatar: string) => (
+    <div className="space-y-4">
+        <div className="flex items-center gap-4">
+            <img src={currentAvatar} className="w-16 h-16 rounded-full border-2 border-slate-100 object-cover bg-slate-50" />
+            <div className="flex-1">
+                <label className="block text-xs font-semibold text-slate-500 mb-1">Custom URL</label>
+                <input 
+                    type="text" 
+                    value={currentAvatar}
+                    onChange={(e) => handleChange(id, 'avatar', e.target.value)}
+                    className="w-full text-xs border border-slate-300 rounded p-2 text-slate-600 focus:ring-1 focus:ring-indigo-500 outline-none"
+                    placeholder="https://..."
+                />
+            </div>
+        </div>
+        
+        <div className="space-y-3">
+            {Object.entries(AVATAR_OPTIONS).map(([category, options]) => (
+                <div key={category}>
+                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">{category}</p>
+                    <div className="flex flex-wrap gap-2">
+                        {options.map((url) => (
+                            <button 
+                                key={url}
+                                onClick={() => handleChange(id, 'avatar', url)}
+                                className={`w-10 h-10 rounded-full border-2 transition overflow-hidden bg-slate-50 ${currentAvatar === url ? 'border-indigo-500 scale-110 shadow-sm' : 'border-transparent hover:border-slate-200'}`}
+                            >
+                                <img src={url} className="w-full h-full object-cover" />
+                            </button>
+                        ))}
+                    </div>
+                </div>
+            ))}
+        </div>
+    </div>
+  );
+
   return (
     <div className="max-w-4xl mx-auto space-y-8">
         
@@ -115,20 +176,9 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ users, currency, the
                         <Users size={18} style={{ color: localUsers.shared.color }}/> Shared Account
                     </h3>
                     
-                    <div className="space-y-4">
-                        <div className="flex items-center gap-4">
-                            <img src={localUsers.shared.avatar} className="w-16 h-16 rounded-full border-2 border-slate-100 object-cover" />
-                            <div className="flex-1">
-                                <label className="block text-xs font-semibold text-slate-500 mb-1">Avatar URL</label>
-                                <input 
-                                    type="text" 
-                                    value={localUsers.shared.avatar}
-                                    onChange={(e) => handleChange('shared', 'avatar', e.target.value)}
-                                    className="w-full text-xs border border-slate-300 rounded p-2 text-slate-600"
-                                />
-                            </div>
-                        </div>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {renderAvatarPicker('shared', localUsers.shared.avatar)}
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-6">
                             <div>
                                 <label className="block text-sm font-medium text-slate-700 mb-1">Name</label>
                                 <input 
@@ -157,14 +207,12 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ users, currency, the
                                             className="absolute inset-0 w-10 h-10 -top-2 -left-2 cursor-pointer opacity-0"
                                         />
                                         <div className="w-full h-full" style={{ backgroundColor: localUsers.shared.color }}></div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            )}
-
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                )}
             {/* User 1 Card */}
             <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm relative overflow-hidden">
                 <div className="absolute top-0 left-0 w-full h-1" style={{ backgroundColor: localUsers.user_1.color }}></div>
@@ -172,19 +220,9 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ users, currency, the
                     <UserIcon size={18} style={{ color: localUsers.user_1.color }}/> Partner 1
                 </h3>
                 
-                <div className="space-y-4">
-                    <div className="flex items-center gap-4">
-                        <img src={localUsers.user_1.avatar} className="w-16 h-16 rounded-full border-2 border-slate-100 object-cover" />
-                        <div className="flex-1">
-                            <label className="block text-xs font-semibold text-slate-500 mb-1">Avatar URL</label>
-                            <input 
-                                type="text" 
-                                value={localUsers.user_1.avatar}
-                                onChange={(e) => handleChange('user_1', 'avatar', e.target.value)}
-                                className="w-full text-xs border border-slate-300 rounded p-2 text-slate-600"
-                            />
-                        </div>
-                    </div>
+                {renderAvatarPicker('user_1', localUsers.user_1.avatar)}
+
+                <div className="space-y-4 mt-6">
                     <div>
                         <label className="block text-sm font-medium text-slate-700 mb-1">Name</label>
                         <input 
@@ -226,19 +264,9 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ users, currency, the
                     <UserIcon size={18} style={{ color: localUsers.user_2.color }}/> Partner 2
                 </h3>
                 
-                <div className="space-y-4">
-                    <div className="flex items-center gap-4">
-                        <img src={localUsers.user_2.avatar} className="w-16 h-16 rounded-full border-2 border-slate-100 object-cover" />
-                        <div className="flex-1">
-                            <label className="block text-xs font-semibold text-slate-500 mb-1">Avatar URL</label>
-                            <input 
-                                type="text" 
-                                value={localUsers.user_2.avatar}
-                                onChange={(e) => handleChange('user_2', 'avatar', e.target.value)}
-                                className="w-full text-xs border border-slate-300 rounded p-2 text-slate-600"
-                            />
-                        </div>
-                    </div>
+                {renderAvatarPicker('user_2', localUsers.user_2.avatar)}
+
+                <div className="space-y-4 mt-6">
                     <div>
                         <label className="block text-sm font-medium text-slate-700 mb-1">Name</label>
                         <input 

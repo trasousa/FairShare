@@ -21,14 +21,13 @@ interface AccountSummaryProps {
 
 export const AccountSummary: React.FC<AccountSummaryProps> = ({ type, title, user, spent, budget, budgets = [], categories = [], budgetEntries = [], savings, entries, income, currency, color = '#64748b' }) => {
   
-  const calculateGoalTotal = (goal: SavingsGoal) => {
-      const contributed = entries
-        .filter(e => e.categoryId === goal.id)
+  const totalMonthlySavings = savings.reduce((acc, goal) => {
+      const contributed = budgetEntries
+        .filter(e => e.categoryId === goal.id && e.account === type)
         .reduce((sum, e) => sum + e.amount, 0);
-      return goal.initialAmount + contributed;
-  };
+      return acc + contributed;
+  }, 0);
 
-  const totalCurrentSavings = savings.reduce((acc, s) => acc + calculateGoalTotal(s), 0);
   const budgetProgress = budget > 0 ? Math.min((spent / budget) * 100, 100) : 0;
 
   const accountBudgets = budgets.filter(b => b.account === type);
@@ -113,20 +112,28 @@ export const AccountSummary: React.FC<AccountSummaryProps> = ({ type, title, use
           <div className="bg-slate-50 rounded-xl p-4 border border-slate-100">
               <div className="flex items-center gap-2 mb-3 text-slate-500">
                   <PiggyBank size={16} />
-                  <span className="text-sm font-semibold">Net Worth & Savings</span>
+                  <span className="text-sm font-semibold">Monthly Savings</span>
               </div>
               <div className="mb-3">
-                 <span className="text-2xl font-bold text-slate-800">{formatCurrency(totalCurrentSavings, currency)}</span>
+                 <span className="text-2xl font-bold text-slate-800">{formatCurrency(totalMonthlySavings, currency)}</span>
               </div>
               
               <div className="space-y-2 max-h-32 overflow-y-auto custom-scrollbar pr-1">
-                  {savings.map(goal => (
-                      <div key={goal.id} className="flex justify-between text-xs border-b border-slate-100 last:border-0 pb-1">
-                          <span className="text-slate-600 truncate max-w-[140px]">{goal.name}</span>
-                          <span className="font-medium text-slate-900">{formatCurrency(calculateGoalTotal(goal), currency)}</span>
-                      </div>
-                  ))}
-                  {savings.length === 0 && <span className="text-xs text-slate-400 italic">No savings goals tracked.</span>}
+                  {savings.map(goal => {
+                      const contributed = budgetEntries
+                        .filter(e => e.categoryId === goal.id && e.account === type)
+                        .reduce((sum, e) => sum + e.amount, 0);
+                      
+                      if (contributed === 0) return null;
+
+                      return (
+                        <div key={goal.id} className="flex justify-between text-xs border-b border-slate-100 last:border-0 pb-1">
+                            <span className="text-slate-600 truncate max-w-[140px]">{goal.name}</span>
+                            <span className="font-medium text-slate-900">{formatCurrency(contributed, currency)}</span>
+                        </div>
+                      );
+                  })}
+                  {totalMonthlySavings === 0 && <span className="text-xs text-slate-400 italic">No savings this month.</span>}
               </div>
           </div>
       </div>

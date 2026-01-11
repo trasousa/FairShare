@@ -209,9 +209,9 @@ export const MonthlyDashboard: React.FC<MonthlyDashboardProps> = ({ entries, bud
                 </div>
             </div>
 
-            <div className="bg-emerald-900 rounded-2xl p-6 text-white shadow-xl relative overflow-hidden flex flex-col">
+            <div className="bg-emerald-900 rounded-2xl p-6 text-white shadow-xl relative overflow-hidden flex flex-col justify-between">
                 <div className="absolute top-0 right-0 w-64 h-64 bg-white opacity-5 rounded-full -mr-16 -mt-16 blur-3xl"></div>
-                 <div className="mb-6 relative z-10 border-b border-emerald-800/50 pb-4">
+                 <div className="mb-6 relative z-10">
                     <h3 className="text-lg font-semibold mb-1 flex items-center gap-2">
                         <TrendingUp size={20} className="text-emerald-300"/> Wealth Building
                     </h3>
@@ -221,27 +221,32 @@ export const MonthlyDashboard: React.FC<MonthlyDashboardProps> = ({ entries, bud
                     </div>
                 </div>
                 
-                <div className="relative z-10 flex-1 overflow-y-auto max-h-40 pr-2 custom-scrollbar space-y-4">
-                     {savings.map(goal => {
-                        const current = savingsEntries.filter(e => e.categoryId === goal.id).reduce((sum, e) => sum + e.amount, 0);
-                        return (
-                            <div key={goal.id}>
-                                <div className="flex justify-between text-xs mb-1.5">
-                                    <div className="flex items-center gap-2">
-                                        <span className="font-medium text-emerald-50">{goal.name}</span>
-                                        <span className="text-[10px] bg-emerald-800 px-1.5 py-0.5 rounded text-emerald-300">
-                                            {goal.account === 'SHARED' ? 'Shared' : goal.account === 'USER_1' ? users.user_1.name : users.user_2.name}
-                                        </span>
-                                    </div>
-                                    <span className="font-bold">{formatCurrency(current, currency)}</span>
-                                </div>
-                                <div className="w-full bg-black/20 h-1.5 rounded-full overflow-hidden">
-                                    <div className="h-full bg-emerald-400" style={{ width: current > 0 ? '100%' : '0%', opacity: current > 0 ? 1 : 0.3 }}></div>
-                                </div>
-                            </div>
-                        )
-                    })}
-                    {savings.length === 0 && <p className="text-sm text-emerald-300 italic">No savings goals set.</p>}
+                <div className="relative z-10 bg-white/10 rounded-2xl p-5 backdrop-blur-sm border border-white/10">
+                    <div className="flex justify-between items-center mb-3">
+                        <span className="text-sm font-medium text-emerald-100">Savings Target</span>
+                        <span className="font-bold">{formatCurrency(displaySavingsTarget, currency)}</span>
+                    </div>
+                    
+                    <div className="w-full bg-emerald-800/50 h-2 rounded-full overflow-hidden mb-4">
+                        <div className="h-full bg-emerald-400" style={{ width: `${Math.min((monthlySavingsTotal / displaySavingsTarget) * 100, 100)}%` }}></div>
+                    </div>
+
+                    <div className="flex items-center gap-3">
+                        <div className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 ${monthlySavingsTotal >= displaySavingsTarget ? 'bg-emerald-400 text-emerald-900' : 'bg-amber-400 text-amber-900'}`}>
+                            {monthlySavingsTotal >= displaySavingsTarget ? <CheckCircle2 size={20} /> : <AlertCircle size={20} />}
+                        </div>
+                        <div>
+                            <p className="text-sm font-bold">
+                                {monthlySavingsTotal >= displaySavingsTarget ? 'Target Achieved!' : 'Below Target'}
+                            </p>
+                            <p className="text-xs text-emerald-200">
+                                {monthlySavingsTotal >= displaySavingsTarget 
+                                    ? `${formatCurrency(monthlySavingsTotal - displaySavingsTarget, currency)} above goal`
+                                    : `${formatCurrency(displaySavingsTarget - monthlySavingsTotal, currency)} remaining`
+                                }
+                            </p>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
