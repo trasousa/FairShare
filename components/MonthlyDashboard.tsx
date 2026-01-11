@@ -2,7 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { ExpenseEntry, Budget, Category, SavingsGoal, IncomeEntry, User, CurrencyCode } from '../types';
 import { AccountSummary } from './AccountSummary';
 import { formatCurrency } from '../services/financeService';
-import { PieChart, TrendingUp, Target, AlertCircle, CheckCircle2 } from 'lucide-react';
+import { PieChart, TrendingUp } from 'lucide-react';
 
 interface MonthlyDashboardProps {
   entries: ExpenseEntry[];
@@ -128,23 +128,6 @@ export const MonthlyDashboard: React.FC<MonthlyDashboardProps> = ({ entries, bud
     .sort((a, b) => b.totalSpent - a.totalSpent);
   }, [categories, monthlyEntries]);
 
-  const budgetStatus = useMemo(() => {
-      return budgets.map(b => {
-          const cat = categories.find(c => c.id === b.categoryId);
-          if (!cat) return null;
-          const spent = monthlyEntries.filter(e => e.categoryId === cat.id).reduce((sum, e) => sum + e.amount, 0);
-          return {
-              id: b.categoryId,
-              name: cat.name,
-              limit: b.limit,
-              spent,
-              percent: Math.min((spent / b.limit) * 100, 100),
-              isOver: spent > b.limit,
-              account: b.account
-          };
-      }).filter(Boolean).sort((a,b) => (b!.percent || 0) - (a!.percent || 0));
-  }, [budgets, categories, monthlyEntries]);
-
   const toggleCat = (id: string) => {
       setExpandedCatId(prev => prev === id ? null : id);
   };
@@ -254,7 +237,6 @@ export const MonthlyDashboard: React.FC<MonthlyDashboardProps> = ({ entries, bud
                 <div className="relative z-10 flex-1 overflow-y-auto max-h-40 pr-2 custom-scrollbar space-y-4">
                      {savings.map(goal => {
                         const current = savingsEntries.filter(e => e.categoryId === goal.id).reduce((sum, e) => sum + e.amount, 0);
-                        // Simple target visualization: assuming target is annual or fixed, let's just show raw contribution
                         return (
                             <div key={goal.id}>
                                 <div className="flex justify-between text-xs mb-1.5">
@@ -267,7 +249,6 @@ export const MonthlyDashboard: React.FC<MonthlyDashboardProps> = ({ entries, bud
                                     <span className="font-bold">{formatCurrency(current, currency)}</span>
                                 </div>
                                 <div className="w-full bg-black/20 h-1.5 rounded-full overflow-hidden">
-                                    {/* Visual bar just to show activity - fully filled if > 0 for now as we don't have monthly targets per goal easily accessible without complex logic */}
                                     <div className="h-full bg-emerald-400" style={{ width: current > 0 ? '100%' : '0%', opacity: current > 0 ? 1 : 0.3 }}></div>
                                 </div>
                             </div>
@@ -278,35 +259,7 @@ export const MonthlyDashboard: React.FC<MonthlyDashboardProps> = ({ entries, bud
             </div>
         </div>
 
-        {/* 3. Budget Overview */}
-        <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
-            <h3 className="font-bold text-slate-800 mb-4 flex items-center gap-2">
-                <Target size={18} className="text-indigo-600"/> Budget Performance
-            </h3>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-                {budgetStatus.map((b: any) => (
-                    <div key={b.id} className="border border-slate-100 rounded-lg p-3 hover:shadow-sm transition bg-slate-50/50">
-                        <div className="flex justify-between items-start mb-2">
-                            <div>
-                                <span className="block text-sm font-semibold text-slate-700">{b.name}</span>
-                                <span className={`text-[10px] uppercase font-bold tracking-wider ${b.account === 'SHARED' ? 'text-purple-500' : b.account === 'USER_1' ? 'text-blue-500' : 'text-pink-500'}`}>{b.account === 'SHARED' ? 'Shared' : b.account === 'USER_1' ? users.user_1.name : users.user_2.name}</span>
-                            </div>
-                            {b.isOver ? <AlertCircle size={18} className="text-red-500"/> : <CheckCircle2 size={18} className="text-emerald-500"/>}
-                        </div>
-                        <div className="flex justify-between items-end mb-1">
-                            <span className={`text-sm font-bold ${b.isOver ? 'text-red-600' : 'text-slate-700'}`}>{formatCurrency(b.spent, currency)}</span>
-                            <span className="text-xs text-slate-400">of {formatCurrency(b.limit, currency)}</span>
-                        </div>
-                        <div className="w-full bg-white h-2 rounded-full overflow-hidden border border-slate-100">
-                            <div className={`h-full ${b.isOver ? 'bg-red-500' : 'bg-indigo-500'}`} style={{ width: `${b.percent}%` }}></div>
-                        </div>
-                    </div>
-                ))}
-                {budgetStatus.length === 0 && <p className="text-slate-400 text-sm col-span-full text-center py-4">No active budgets for this month.</p>}
-            </div>
-        </div>
-
-        {/* 4. Category Breakdown */}
+        {/* 3. Category Breakdown */}
         <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
             <div className="px-6 py-4 border-b border-slate-100">
                 <h3 className="font-bold text-slate-800">Category Breakdown</h3>

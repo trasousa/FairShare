@@ -253,18 +253,18 @@ function App({ instanceId, onExit }: AppProps) {
       {/* Top Navigation (Desktop) */}
       <header className={`fixed top-0 left-0 right-0 h-16 border-b px-4 lg:px-8 flex items-center justify-between z-40 ${navBarClass}`}>
            <div className="flex items-center gap-8">
-               <div className="flex items-center gap-3">
-                   <div 
-                        onClick={() => {
-                            if (easterEggCount + 1 >= 2) {
-                                setShowEasterEgg(true);
-                                setEasterEggCount(0);
-                            } else {
-                                setEasterEggCount(p => p + 1);
-                            }
-                        }}
-                        className="w-8 h-8 bg-indigo-600 rounded-lg flex items-center justify-center font-bold text-white shadow-lg shadow-indigo-500/30 cursor-pointer select-none transition-transform active:scale-95"
-                   >FS</div>
+               <div 
+                    className="flex items-center gap-3 cursor-pointer select-none group"
+                    onClick={() => {
+                        if (easterEggCount + 1 >= 2) {
+                            setShowEasterEgg(true);
+                            setEasterEggCount(0);
+                        } else {
+                            setEasterEggCount(p => p + 1);
+                        }
+                    }}
+               >
+                   <div className="w-8 h-8 bg-indigo-600 rounded-lg flex items-center justify-center font-bold text-white shadow-lg shadow-indigo-500/30 transition-transform group-active:scale-95">FS</div>
                    <span className={`font-bold text-lg hidden md:block ${theme === 'dark' ? 'text-white' : 'text-slate-800'}`}>FairShare</span>
                </div>
 
@@ -367,7 +367,7 @@ function App({ instanceId, onExit }: AppProps) {
         </header>
 
         {/* Main Content Area */}
-        <div className="pt-20 px-4 pb-24 lg:px-8 max-w-7xl mx-auto w-full space-y-6">
+        <div className="pt-20 px-6 lg:px-12 max-w-[1800px] mx-auto w-full space-y-6">
           <ErrorBoundary componentName="Main Content">
             {activeMainTab === 'insights' && (
                 <>
@@ -377,7 +377,7 @@ function App({ instanceId, onExit }: AppProps) {
                     </div>
                     
                     {activeInsightsView === 'global' && (
-                        <DashboardCharts entries={filteredDashboardEntries} categories={categories} incomes={filteredDashboardIncomes} users={users} currency={currency} />
+                        <DashboardCharts entries={filteredDashboardEntries} categories={categories} incomes={filteredDashboardIncomes} users={users} currency={currency} trips={trips} />
                     )}
 
                     {activeInsightsView === 'monthly' && (

@@ -179,37 +179,37 @@ export const TravelDashboard: React.FC<TravelDashboardProps> = ({ trips, entries
                 <h3 className="font-bold text-slate-700 mb-4">{editingTrip ? 'Edit Trip Details' : 'New Adventure'}</h3>
                 <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div className="col-span-1 md:col-span-2">
-                        <label className="block text-xs font-semibold text-slate-500 mb-1">Trip Name</label>
+                        <label className="block text-xs font-bold text-slate-700 mb-1">Trip Name</label>
                         <input required type="text" placeholder="e.g. Eurotrip 2025" className="w-full border border-slate-300 rounded-lg p-2 text-sm" 
                             value={newTrip.name || ''} onChange={e => setNewTrip({...newTrip, name: e.target.value})}
                         />
                     </div>
                     <div>
-                        <label className="block text-xs font-semibold text-slate-500 mb-1">Destination</label>
+                        <label className="block text-xs font-bold text-slate-700 mb-1">Destination</label>
                         <input required type="text" placeholder="e.g. Paris, France" className="w-full border border-slate-300 rounded-lg p-2 text-sm" 
                             value={newTrip.destination || ''} onChange={e => setNewTrip({...newTrip, destination: e.target.value})}
                         />
                     </div>
                     <div>
-                        <label className="block text-xs font-semibold text-slate-500 mb-1">Total Budget</label>
+                        <label className="block text-xs font-bold text-slate-700 mb-1">Total Budget</label>
                         <input required type="number" placeholder="0.00" className="w-full border border-slate-300 rounded-lg p-2 text-sm" 
                             value={newTrip.budget || ''} onChange={e => setNewTrip({...newTrip, budget: parseFloat(e.target.value)})}
                         />
                     </div>
                     <div>
-                        <label className="block text-xs font-semibold text-slate-500 mb-1">Start Date</label>
+                        <label className="block text-xs font-bold text-slate-700 mb-1">Start Date</label>
                         <input required type="date" className="w-full border border-slate-300 rounded-lg p-2 text-sm" 
                             value={newTrip.startDate || ''} onChange={e => setNewTrip({...newTrip, startDate: e.target.value})}
                         />
                     </div>
                     <div>
-                        <label className="block text-xs font-semibold text-slate-500 mb-1">End Date (Optional)</label>
+                        <label className="block text-xs font-bold text-slate-700 mb-1">End Date (Optional)</label>
                         <input type="date" className="w-full border border-slate-300 rounded-lg p-2 text-sm" 
                             value={newTrip.endDate || ''} onChange={e => setNewTrip({...newTrip, endDate: e.target.value})}
                         />
                     </div>
                     <div>
-                        <label className="block text-xs font-semibold text-slate-500 mb-1">Account</label>
+                        <label className="block text-xs font-bold text-slate-700 mb-1">Account</label>
                         <select 
                             className="w-full border border-slate-300 rounded-lg p-2 text-sm"
                             value={newTrip.account || 'SHARED'}
@@ -221,7 +221,7 @@ export const TravelDashboard: React.FC<TravelDashboardProps> = ({ trips, entries
                         </select>
                     </div>
                     <div>
-                        <label className="block text-xs font-semibold text-slate-500 mb-1">Status</label>
+                        <label className="block text-xs font-bold text-slate-700 mb-1">Status</label>
                         <select 
                             className="w-full border border-slate-300 rounded-lg p-2 text-sm"
                             value={newTrip.status || 'PLANNED'}
