@@ -17,7 +17,7 @@ import {
 } from 'recharts';
 import { ExpenseEntry, Category, AccountType, IncomeEntry, User, CurrencyCode, Trip } from '../types';
 import { formatCurrency } from '../services/financeService';
-import { ChevronDown, ChevronUp, Wallet, User as UserIcon, Users, List, BarChart as BarChartIcon, Plane } from 'lucide-react';
+import { ChevronDown, ChevronUp, Wallet, User as UserIcon, Users, List, BarChart as BarChartIcon, Plane, MessageSquare } from 'lucide-react';
 
 interface DashboardChartsProps {
   entries: ExpenseEntry[];
@@ -168,7 +168,8 @@ export const DashboardCharts: React.FC<DashboardChartsProps> = ({ entries, categ
           let current = { key: sorted[0].id, name: categories.find(c => c.id === sorted[0].categoryId)?.name || 'Unknown', amount: sorted[0].amount, total: sorted[0].amount, entries: [sorted[0]], account: sorted[0].account };
           for (let i = 1; i < sorted.length; i++) {
               const e = sorted[i];
-              const name = categories.find(c => c.id === e.categoryId)?.name || 'Unknown';
+              const cat = categories.find(c => c.id === e.categoryId);
+              const name = cat?.name || 'Unknown';
               if (name === current.name && Math.abs(e.amount - current.amount) < 0.01 && e.account === current.account) {
                   current.entries.push(e);
                   current.total += e.amount;
@@ -293,7 +294,7 @@ export const DashboardCharts: React.FC<DashboardChartsProps> = ({ entries, categ
                                     iconSize={8}
                                     wrapperStyle={{ fontSize: '10px', paddingBottom: '20px' }}
                                     iconType="circle" 
-                                    onClick={(e) => handleLegendClick(e.dataKey)} 
+                                    onClick={(e) => handleLegendClick(e.dataKey as string)} 
                                     cursor="pointer" 
                                 />
                                 
@@ -554,13 +555,18 @@ export const DashboardCharts: React.FC<DashboardChartsProps> = ({ entries, categ
                          {variableExpenses.map((group, idx) => {
                              const isExpanded = expandedGroupId === group.key;
                              const count = group.entries.length;
+                             const hasComment = count === 1 && group.entries[0].description;
+
                              return (
                                  <div key={group.key} className="border-b border-slate-50 last:border-0 pb-2">
                                      <div onClick={() => count > 1 && toggleGroup(group.key)} className={`flex items-center justify-between py-1.5 cursor-pointer ${count > 1 ? 'hover:bg-slate-50 rounded-lg px-1.5 -mx-1.5 transition' : ''}`}>
                                          <div className="flex items-center gap-3">
                                              <div className="text-xs font-bold text-slate-300 w-4">#{idx+1}</div>
                                              <div>
-                                                 <span className="block text-sm font-semibold text-slate-700">{group.catName} {count > 1 && <span className="text-xs font-normal text-slate-400 ml-1">(x{count})</span>}</span>
+                                                 <div className="flex items-center gap-2">
+                                                     <span className="block text-sm font-semibold text-slate-700">{group.name} {count > 1 && <span className="text-xs font-normal text-slate-400 ml-1">(x{count})</span>}</span>
+                                                     {hasComment && <span title={group.entries[0].description}><MessageSquare size={12} className="text-indigo-400" /></span>}
+                                                 </div>
                                                  <div className="flex items-center mt-0.5">{renderAccountLabel(group.account)}{count === 1 && <span className="text-[10px] text-slate-400 ml-2">{group.entries[0].monthId}</span>}</div>
                                              </div>
                                          </div>
@@ -572,7 +578,14 @@ export const DashboardCharts: React.FC<DashboardChartsProps> = ({ entries, categ
                                      {isExpanded && (
                                          <div className="bg-slate-50 rounded-lg p-3 mt-2 ml-7 text-xs space-y-2 animate-in fade-in slide-in-from-top-1">
                                              {group.entries.map((e: any) => (
-                                                 <div key={e.id} className="flex justify-between text-slate-500"><span>{e.monthId} • {e.description || 'Entry'}</span><span className="font-medium">{formatCurrency(e.amount, currency)}</span></div>
+                                                 <div key={e.id} className="flex justify-between items-center text-slate-500 hover:text-slate-700 transition-colors" title={e.description || 'No description'}>
+                                                     <div className="flex items-center gap-2">
+                                                         <span>{e.monthId}</span>
+                                                         {e.description && <MessageSquare size={10} className="text-indigo-300" />}
+                                                         <span className="truncate max-w-[120px] italic">{e.description || 'Entry'}</span>
+                                                     </div>
+                                                     <span className="font-medium">{formatCurrency(e.amount, currency)}</span>
+                                                 </div>
                                              ))}
                                          </div>
                                      )}

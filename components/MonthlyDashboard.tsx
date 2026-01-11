@@ -185,7 +185,13 @@ export const MonthlyDashboard: React.FC<MonthlyDashboardProps> = ({ entries, bud
             <div className="bg-indigo-900 rounded-2xl p-6 text-white shadow-xl relative overflow-hidden flex flex-col justify-between">
                 <div className="absolute top-0 right-0 w-64 h-64 bg-white opacity-5 rounded-full -mr-16 -mt-16 blur-3xl"></div>
                 <div>
-                    <h3 className="text-lg font-semibold mb-2 relative z-10">FairShare Contributions</h3>
+                    <div className="flex justify-between items-start mb-2 relative z-10">
+                        <h3 className="text-lg font-semibold">FairShare Contributions</h3>
+                        <div className="text-right">
+                            <span className="text-[10px] uppercase tracking-wider text-indigo-300 block">Total Income</span>
+                            <span className="text-sm font-bold text-white">{formatCurrency(totalIncome, currency)}</span>
+                        </div>
+                    </div>
                     <p className="text-indigo-200 text-sm mb-6 relative z-10">
                         Target transfers based on the <span className="font-bold text-white">{Math.round(user1Ratio*100)}%</span> / <span className="font-bold text-white">{Math.round((1-user1Ratio)*100)}%</span> income split for shared budget.
                     </p>
@@ -193,25 +199,31 @@ export const MonthlyDashboard: React.FC<MonthlyDashboardProps> = ({ entries, bud
                 
                 <div className="grid grid-cols-2 gap-4 relative z-10">
                     <div className="bg-white/10 rounded-xl p-3 backdrop-blur-sm border border-white/10">
-                            <div className="flex items-center gap-2 mb-2">
+                            <div className="flex items-center gap-2 mb-1">
                                 <img src={users.user_1.avatar} className="w-6 h-6 rounded-full border border-white/20" />
                                 <span className="font-medium text-xs text-indigo-100">{users.user_1.name}</span>
                             </div>
-                            <span className="text-lg font-bold">{formatCurrency(user1Contribution, currency)}</span>
+                            <div className="flex flex-col">
+                                <span className="text-lg font-bold">{formatCurrency(user1Contribution, currency)}</span>
+                                <span className="text-[10px] text-indigo-300 opacity-80">Income: {formatCurrency(incomeU1, currency)}</span>
+                            </div>
                     </div>
                     <div className="bg-white/10 rounded-xl p-3 backdrop-blur-sm border border-white/10">
-                            <div className="flex items-center gap-2 mb-2">
+                            <div className="flex items-center gap-2 mb-1">
                                 <img src={users.user_2.avatar} className="w-6 h-6 rounded-full border border-white/20" />
                                 <span className="font-medium text-xs text-indigo-100">{users.user_2.name}</span>
                             </div>
-                            <span className="text-lg font-bold">{formatCurrency(user2Contribution, currency)}</span>
+                            <div className="flex flex-col">
+                                <span className="text-lg font-bold">{formatCurrency(user2Contribution, currency)}</span>
+                                <span className="text-[10px] text-indigo-300 opacity-80">Income: {formatCurrency(incomeU2, currency)}</span>
+                            </div>
                     </div>
                 </div>
             </div>
 
             <div className="bg-emerald-900 rounded-2xl p-6 text-white shadow-xl relative overflow-hidden flex flex-col justify-between">
                 <div className="absolute top-0 right-0 w-64 h-64 bg-white opacity-5 rounded-full -mr-16 -mt-16 blur-3xl"></div>
-                 <div className="mb-6 relative z-10">
+                 <div className="mb-4 relative z-10">
                     <h3 className="text-lg font-semibold mb-1 flex items-center gap-2">
                         <TrendingUp size={20} className="text-emerald-300"/> Wealth Building
                     </h3>
@@ -219,6 +231,22 @@ export const MonthlyDashboard: React.FC<MonthlyDashboardProps> = ({ entries, bud
                         <span className="text-4xl font-bold">{formatCurrency(monthlySavingsTotal, currency)}</span>
                         <span className="text-sm text-emerald-200 mb-1.5">saved this month</span>
                     </div>
+                </div>
+
+                <div className="grid grid-cols-3 gap-2 mb-6 relative z-10">
+                    {[
+                        { label: 'Shared', val: totals.SHARED, color: users.shared?.color, avatar: users.shared?.avatar },
+                        { label: users.user_1.name, val: monthlyEntries.filter(e => e.account === 'USER_1' && categories.find(c => c.id === e.categoryId)?.group === 'SAVINGS').reduce((s, e) => s + e.amount, 0), color: users.user_1.color, avatar: users.user_1.avatar },
+                        { label: users.user_2.name, val: monthlyEntries.filter(e => e.account === 'USER_2' && categories.find(c => c.id === e.categoryId)?.group === 'SAVINGS').reduce((s, e) => s + e.amount, 0), color: users.user_2.color, avatar: users.user_2.avatar }
+                    ].map((item, i) => (
+                        <div key={i} className="bg-white/5 rounded-lg p-2 border border-white/5">
+                            <div className="flex items-center gap-1.5 mb-1">
+                                <img src={item.avatar} className="w-3.5 h-3.5 rounded-full" />
+                                <span className="text-[10px] text-emerald-200 truncate">{item.label}</span>
+                            </div>
+                            <span className="text-xs font-bold">{formatCurrency(item.val, currency)}</span>
+                        </div>
+                    ))}
                 </div>
                 
                 <div className="relative z-10 bg-white/10 rounded-2xl p-5 backdrop-blur-sm border border-white/10">

@@ -16,91 +16,119 @@ interface SettingsPageProps {
 export const SettingsPage: React.FC<SettingsPageProps> = ({ users, currency, theme = 'light', onUpdateUser, onUpdateCurrency, onUpdateTheme, onExport, onExit }) => {
   const [localUsers, setLocalUsers] = useState(users);
   const [successMsg, setSuccessMsg] = useState('');
+  const [activePicker, setActivePicker] = useState<UserId | null>(null);
 
   const PRESET_COLORS = ['#64748b', '#ef4444', '#f97316', '#f59e0b', '#10b981', '#14b8a6', '#06b6d4', '#3b82f6', '#6366f1', '#8b5cf6', '#a855f7', '#d946ef', '#ec4899', '#f43f5e'];
 
   const handleChange = (id: UserId, field: keyof User, value: any) => {
     setLocalUsers(prev => ({
         ...prev,
-        [id]: { ...prev[id], [field]: value }
+        [id]: {
+            ...prev[id],
+            [field]: value
+        }
     }));
   };
 
-  const handleSave = () => {
-      (Object.values(localUsers) as User[]).forEach(u => {
-          onUpdateUser(u.id, u);
-      });
-      setSuccessMsg('Settings saved successfully!');
-      setTimeout(() => setSuccessMsg(''), 3000);
+  const getAvailableColors = (id: UserId) => {
+    return PRESET_COLORS;
   };
 
-  const getAvailableColors = (currentId: string) => {
-      const usedColors = Object.values(localUsers)
-          .filter(u => u.id !== currentId && u.color)
-          .map(u => u.color);
-      return PRESET_COLORS.filter(c => !usedColors.includes(c));
+  const handleSave = () => {
+    Object.entries(localUsers).forEach(([id, data]) => {
+        onUpdateUser(id as UserId, data);
+    });
+    setSuccessMsg('Settings saved successfully!');
+    setTimeout(() => setSuccessMsg(''), 3000);
   };
 
   const AVATAR_OPTIONS = {
     People: [
-        'https://api.dicebear.com/7.x/avataaars/svg?seed=Felix',
-        'https://api.dicebear.com/7.x/avataaars/svg?seed=Aneka',
-        'https://api.dicebear.com/7.x/avataaars/svg?seed=Jasper',
-        'https://api.dicebear.com/7.x/avataaars/svg?seed=Milo',
-        'https://api.dicebear.com/7.x/avataaars/svg?seed=Luna'
+        'https://api.dicebear.com/7.x/personas/svg?seed=Felix',
+        'https://api.dicebear.com/7.x/personas/svg?seed=Aneka',
+        'https://api.dicebear.com/7.x/personas/svg?seed=Jasper',
+        'https://api.dicebear.com/7.x/personas/svg?seed=Milo',
+        'https://api.dicebear.com/7.x/personas/svg?seed=Luna'
     ],
     Animals: [
-        'https://api.dicebear.com/7.x/adventurer/svg?seed=Bear',
-        'https://api.dicebear.com/7.x/adventurer/svg?seed=Fox',
-        'https://api.dicebear.com/7.x/adventurer/svg?seed=Owl',
-        'https://api.dicebear.com/7.x/adventurer/svg?seed=Cat',
-        'https://api.dicebear.com/7.x/adventurer/svg?seed=Dog'
+        'https://api.dicebear.com/7.x/big-ears/svg?seed=Bear',
+        'https://api.dicebear.com/7.x/big-ears/svg?seed=Fox',
+        'https://api.dicebear.com/7.x/big-ears/svg?seed=Owl',
+        'https://api.dicebear.com/7.x/big-ears/svg?seed=Cat',
+        'https://api.dicebear.com/7.x/big-ears/svg?seed=Dog'
     ],
-    Plants: [
-        'https://api.dicebear.com/7.x/bottts/svg?seed=Flower',
-        'https://api.dicebear.com/7.x/bottts/svg?seed=Leaf',
-        'https://api.dicebear.com/7.x/bottts/svg?seed=Tree',
-        'https://api.dicebear.com/7.x/bottts/svg?seed=Cactus',
-        'https://api.dicebear.com/7.x/bottts/svg?seed=Sprout'
+    Objects: [
+        'https://api.dicebear.com/7.x/icons/svg?seed=Ball',
+        'https://api.dicebear.com/7.x/icons/svg?seed=Flower',
+        'https://api.dicebear.com/7.x/icons/svg?seed=Plant',
+        'https://api.dicebear.com/7.x/icons/svg?seed=Sun',
+        'https://api.dicebear.com/7.x/icons/svg?seed=Book'
+    ],
+    Abstract: [
+        'https://api.dicebear.com/7.x/abstract/svg?seed=One',
+        'https://api.dicebear.com/7.x/abstract/svg?seed=Two',
+        'https://api.dicebear.com/7.x/abstract/svg?seed=Three',
+        'https://api.dicebear.com/7.x/abstract/svg?seed=Four',
+        'https://api.dicebear.com/7.x/abstract/svg?seed=Five'
     ]
   };
 
-  const renderAvatarPicker = (id: UserId, currentAvatar: string) => (
-    <div className="space-y-4">
-        <div className="flex items-center gap-4">
-            <img src={currentAvatar} className="w-16 h-16 rounded-full border-2 border-slate-100 object-cover bg-slate-50" />
-            <div className="flex-1">
-                <label className="block text-xs font-semibold text-slate-500 mb-1">Custom URL</label>
-                <input 
-                    type="text" 
-                    value={currentAvatar}
-                    onChange={(e) => handleChange(id, 'avatar', e.target.value)}
-                    className="w-full text-xs border border-slate-300 rounded p-2 text-slate-600 focus:ring-1 focus:ring-indigo-500 outline-none"
-                    placeholder="https://..."
-                />
+  const renderAvatarPicker = (id: UserId, currentAvatar: string) => {
+    const isOpen = activePicker === id;
+    
+    return (
+        <div className="space-y-4">
+            <div className="flex items-center gap-4">
+                <button 
+                    onClick={() => setActivePicker(isOpen ? null : id)}
+                    className="relative group cursor-pointer"
+                >
+                    <img src={currentAvatar} className="w-20 h-20 rounded-full border-4 border-white shadow-md object-cover bg-slate-50 transition group-hover:opacity-80" />
+                    <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                        <Upload size={20} className="text-slate-700 bg-white/80 rounded-full p-1" />
+                    </div>
+                </button>
+                <div className="flex-1">
+                    <p className="text-sm font-bold text-slate-700 mb-1">Profile Picture</p>
+                    <p className="text-xs text-slate-500 mb-2">Click the image to change avatar</p>
+                    <input 
+                        type="text" 
+                        value={currentAvatar}
+                        onChange={(e) => handleChange(id, 'avatar', e.target.value)}
+                        className="w-full text-[10px] border border-slate-200 rounded px-2 py-1 text-slate-400 focus:ring-1 focus:ring-indigo-500 outline-none font-mono"
+                        placeholder="Or paste custom URL..."
+                    />
+                </div>
             </div>
-        </div>
-        
-        <div className="space-y-3">
-            {Object.entries(AVATAR_OPTIONS).map(([category, options]) => (
-                <div key={category}>
-                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">{category}</p>
-                    <div className="flex flex-wrap gap-2">
-                        {options.map((url) => (
-                            <button 
-                                key={url}
-                                onClick={() => handleChange(id, 'avatar', url)}
-                                className={`w-10 h-10 rounded-full border-2 transition overflow-hidden bg-slate-50 ${currentAvatar === url ? 'border-indigo-500 scale-110 shadow-sm' : 'border-transparent hover:border-slate-200'}`}
-                            >
-                                <img src={url} className="w-full h-full object-cover" />
-                            </button>
+            
+            {isOpen && (
+                <div className="bg-slate-50 rounded-2xl p-4 border border-slate-100 animate-in slide-in-from-top-2 duration-200">
+                    <div className="space-y-4">
+                        {Object.entries(AVATAR_OPTIONS).map(([category, options]) => (
+                            <div key={category}>
+                                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">{category}</p>
+                                <div className="grid grid-cols-5 gap-2">
+                                    {options.map((url) => (
+                                        <button 
+                                            key={url}
+                                            onClick={() => {
+                                                handleChange(id, 'avatar', url);
+                                                setActivePicker(null);
+                                            }}
+                                            className={`aspect-square rounded-xl border-2 transition overflow-hidden bg-white shadow-sm hover:scale-105 ${currentAvatar === url ? 'border-indigo-500 ring-2 ring-indigo-100' : 'border-transparent'}`}
+                                        >
+                                            <img src={url} className="w-full h-full object-cover" />
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
                         ))}
                     </div>
                 </div>
-            ))}
+            )}
         </div>
-    </div>
-  );
+    );
+  };
 
   return (
     <div className="max-w-4xl mx-auto space-y-8">
