@@ -19,10 +19,6 @@ COPY --from=builder /app/dist ./dist
 
 # Copy backend files
 COPY server.js .
-COPY db.ts .
-COPY types.ts .
-COPY constants.ts .
-COPY services ./services
 
 # Ensure the data directory exists
 RUN mkdir -p data

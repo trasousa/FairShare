@@ -10,6 +10,6 @@ services:
     environment:
       - DB_PATH=/app/data/fairshare.db
     volumes:
-      - /mnt/storage/containers/fairshare/data:/app/data
+      - ./data:/app/data
       - /etc/localtime:/etc/localtime:ro
     restart: unless-stopped

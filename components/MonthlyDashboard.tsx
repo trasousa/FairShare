@@ -1,8 +1,8 @@
 import React, { useMemo, useState } from 'react';
 import { ExpenseEntry, Budget, Category, SavingsGoal, IncomeEntry, User, CurrencyCode } from '../types';
 import { AccountSummary } from './AccountSummary';
-import { formatCurrency } from '../services/financeService';
-import { PieChart, TrendingUp } from 'lucide-react';
+import { formatCurrency, getMonthLabel } from '../services/financeService';
+import { PieChart, TrendingUp, Target, AlertCircle, CheckCircle2 } from 'lucide-react';
 
 interface MonthlyDashboardProps {
   entries: ExpenseEntry[];
@@ -17,19 +17,6 @@ interface MonthlyDashboardProps {
 
 export const MonthlyDashboard: React.FC<MonthlyDashboardProps> = ({ entries, budgets, categories, savings, incomes, users, currency, currentMonth }) => {
   const [expandedCatId, setExpandedCatId] = useState<string | null>(null);
-
-  const getMonthLabel = (dateStr: string) => {
-      try {
-          if (!dateStr) return 'Select Date';
-          const parts = dateStr.split('-');
-          if (parts.length !== 2) return dateStr;
-          const [y, m] = parts.map(Number);
-          if (isNaN(y) || isNaN(m)) return dateStr;
-          return new Date(y, m - 1).toLocaleString('default', { month: 'long', year: 'numeric' });
-      } catch (e) {
-          return dateStr;
-      }
-  };
 
   const monthLabel = getMonthLabel(currentMonth);
 
