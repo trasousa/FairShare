@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { Trip, ExpenseEntry, CurrencyCode } from '../types';
+import { Trip, ExpenseEntry, CurrencyCode, User, AccountType } from '../types';
 import { formatCurrency } from '../services/financeService';
 import { Plane, MapPin, Plus, Calendar, AlertCircle, Edit2, Layers, ChevronDown, ChevronUp } from 'lucide-react';
 
@@ -7,14 +7,15 @@ interface TravelDashboardProps {
   trips: Trip[];
   entries: ExpenseEntry[];
   currency: CurrencyCode;
+  users: Record<string, User>;
   onAddTrip: (trip: Omit<Trip, 'id'>) => void;
   onUpdateTrip: (trip: Trip) => void;
 }
 
-export const TravelDashboard: React.FC<TravelDashboardProps> = ({ trips, entries, currency, onAddTrip, onUpdateTrip }) => {
+export const TravelDashboard: React.FC<TravelDashboardProps> = ({ trips, entries, currency, users, onAddTrip, onUpdateTrip }) => {
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingTrip, setEditingTrip] = useState<Trip | null>(null);
-  const [newTrip, setNewTrip] = useState<Partial<Trip>>({ status: 'PLANNED' });
+  const [newTrip, setNewTrip] = useState<Partial<Trip>>({ status: 'PLANNED', account: 'SHARED' });
   const [selectedYear, setSelectedYear] = useState('All');
   const [expandedDestination, setExpandedDestination] = useState<string | null>(null);
 
@@ -76,10 +77,19 @@ export const TravelDashboard: React.FC<TravelDashboardProps> = ({ trips, entries
       return (
         <div key={trip.id} className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden flex flex-col hover:shadow-md transition relative group">
             <div className="bg-slate-50 p-4 border-b border-slate-100 flex justify-between items-start">
-                <div>
-                    <h3 className="font-bold text-slate-800">{trip.name}</h3>
-                    <div className="flex items-center gap-1 text-xs text-slate-500 mt-1">
-                        <MapPin size={12}/> {trip.destination}
+                <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-full border border-white shadow-sm overflow-hidden shrink-0 bg-white flex items-center justify-center">
+                        <img 
+                            src={(!trip.account || trip.account === 'SHARED') ? users.shared?.avatar : trip.account === 'USER_1' ? users.user_1?.avatar : users.user_2?.avatar} 
+                            className="w-full h-full object-cover" 
+                            alt="Owner"
+                        />
+                    </div>
+                    <div>
+                        <h3 className="font-bold text-slate-800">{trip.name}</h3>
+                        <div className="flex items-center gap-1 text-xs text-slate-500 mt-1">
+                            <MapPin size={12}/> {trip.destination}
+                        </div>
                     </div>
                 </div>
                 <div className="flex items-center gap-2">
@@ -199,6 +209,18 @@ export const TravelDashboard: React.FC<TravelDashboardProps> = ({ trips, entries
                         />
                     </div>
                     <div>
+                        <label className="block text-xs font-semibold text-slate-500 mb-1">Account</label>
+                        <select 
+                            className="w-full border border-slate-300 rounded-lg p-2 text-sm"
+                            value={newTrip.account || 'SHARED'}
+                            onChange={e => setNewTrip({...newTrip, account: e.target.value as AccountType})}
+                        >
+                            <option value="SHARED">Shared</option>
+                            <option value="USER_1">{users.user_1?.name}</option>
+                            <option value="USER_2">{users.user_2?.name}</option>
+                        </select>
+                    </div>
+                    <div>
                         <label className="block text-xs font-semibold text-slate-500 mb-1">Status</label>
                         <select 
                             className="w-full border border-slate-300 rounded-lg p-2 text-sm"
@@ -220,7 +242,7 @@ export const TravelDashboard: React.FC<TravelDashboardProps> = ({ trips, entries
             </div>
         )}
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 items-start">
             {Array.from(groupedTrips.entries()).map(([destination, destTrips]) => {
                 const isStack = destTrips.length > 1;
                 const isExpanded = expandedDestination === destination;
@@ -233,10 +255,14 @@ export const TravelDashboard: React.FC<TravelDashboardProps> = ({ trips, entries
                 const stackTotalBudget = destTrips.reduce((sum, t) => sum + t.budget, 0);
 
                 return (
-                    <div key={destination} className="relative">
+                    <div key={destination} className="relative group/stack">
                         {/* Stacked Effect Backgrounds */}
-                        <div className="absolute top-2 left-2 right-[-8px] h-full bg-white border border-slate-200 rounded-xl shadow-sm rotate-2 z-0"></div>
-                        <div className="absolute top-1 left-1 right-[-4px] h-full bg-white border border-slate-200 rounded-xl shadow-sm rotate-1 z-10"></div>
+                        {!isExpanded && (
+                            <>
+                                <div className="absolute top-3 left-3 w-full h-full bg-slate-200 border border-slate-300 rounded-xl shadow-sm rotate-3 z-0"></div>
+                                <div className="absolute top-1.5 left-1.5 w-full h-full bg-slate-100 border border-slate-200 rounded-xl shadow-sm rotate-1 z-10"></div>
+                            </>
+                        )}
                         
                         {/* Main Stack Card or Expanded Container */}
                         {isExpanded ? (
@@ -256,7 +282,7 @@ export const TravelDashboard: React.FC<TravelDashboardProps> = ({ trips, entries
                         ) : (
                             <div 
                                 onClick={() => setExpandedDestination(destination)}
-                                className="relative z-20 bg-slate-50 rounded-xl border border-slate-200 shadow-md p-6 flex flex-col items-center justify-center min-h-[180px] cursor-pointer hover:shadow-lg hover:-translate-y-1 transition group"
+                                className="relative z-20 bg-white rounded-xl border border-slate-200 shadow-md p-6 flex flex-col items-center justify-center min-h-[180px] cursor-pointer hover:shadow-lg hover:-translate-y-1 transition group"
                             >
                                 <div className="absolute top-3 right-3 bg-indigo-100 text-indigo-700 text-xs font-bold px-2 py-1 rounded-full">
                                     {destTrips.length}

@@ -12,7 +12,8 @@ import {
   Pie,
   Cell,
   AreaChart,
-  Area
+  Area,
+  Sector
 } from 'recharts';
 import { ExpenseEntry, Category, AccountType, IncomeEntry, User, CurrencyCode } from '../types';
 import { formatCurrency } from '../services/financeService';
@@ -26,10 +27,31 @@ interface DashboardChartsProps {
   currency: CurrencyCode;
 }
 
+const CustomTooltip = ({ active, payload, label, currency }: any) => {
+    if (active && payload && payload.length) {
+        return (
+            <div className="bg-white p-4 border border-slate-200 shadow-lg rounded-xl text-xs">
+                <p className="font-bold text-slate-700 mb-2">{label}</p>
+                {payload.map((entry: any, index: number) => (
+                    <div key={index} className="flex justify-between gap-4 mb-1" style={{ color: entry.color }}>
+                        <span>{entry.name}:</span>
+                        <span className="font-bold">{formatCurrency(entry.value, currency)}</span>
+                    </div>
+                ))}
+            </div>
+        );
+    }
+    return null;
+};
+
 export const DashboardCharts: React.FC<DashboardChartsProps> = ({ entries, categories, incomes, users, currency }) => {
   const [expandedGroupId, setExpandedGroupId] = useState<string | null>(null);
+  const [activeFilter, setActiveFilter] = useState<'ALL' | AccountType>('ALL');
+  const [pieActiveIndex, setPieActiveIndex] = useState(0);
   const [visibleBars, setVisibleBars] = useState<Record<string, boolean>>({
-      INCOME: true,
+      INCOME_U1: true,
+      INCOME_U2: true,
+      INCOME_SHARED: true,
       SHARED: true,
       USER_1: true,
       USER_2: true
@@ -39,32 +61,37 @@ export const DashboardCharts: React.FC<DashboardChartsProps> = ({ entries, categ
       return <div className="p-8 text-center text-slate-400 font-medium">Preparing Dashboard...</div>;
   }
 
+  const filteredEntries = useMemo(() => activeFilter === 'ALL' ? entries : entries.filter(e => e.account === activeFilter), [entries, activeFilter]);
+  const filteredIncomes = useMemo(() => activeFilter === 'ALL' ? incomes : incomes.filter(i => i.recipient === activeFilter), [incomes, activeFilter]);
+
   // --- Data Processing for Charts ---
   const monthMap = new Map<string, { 
       month: string, 
       SHARED: number, USER_1: number, USER_2: number, 
-      INCOME: number, 
+      INCOME_U1: number, INCOME_U2: number, INCOME_SHARED: number,
       SAVINGS: number, SAVINGS_U1: number, SAVINGS_U2: number, SAVINGS_SHARED: number 
   }>();
   
-  const allMonths = new Set([...incomes.map(i => i.monthId), ...entries.map(e => e.monthId)]);
+  const allMonths = new Set([...filteredIncomes.map(i => i.monthId), ...filteredEntries.map(e => e.monthId)]);
   allMonths.forEach(m => {
       monthMap.set(m, { 
           month: m, 
           SHARED: 0, USER_1: 0, USER_2: 0, 
-          INCOME: 0, 
+          INCOME_U1: 0, INCOME_U2: 0, INCOME_SHARED: 0,
           SAVINGS: 0, SAVINGS_U1: 0, SAVINGS_U2: 0, SAVINGS_SHARED: 0 
       });
   });
 
-  incomes.forEach(inc => {
+  filteredIncomes.forEach(inc => {
       if (monthMap.has(inc.monthId)) {
           const data = monthMap.get(inc.monthId)!;
-          data.INCOME += inc.amount;
+          if (inc.recipient === 'USER_1') data.INCOME_U1 += inc.amount;
+          else if (inc.recipient === 'USER_2') data.INCOME_U2 += inc.amount;
+          else data.INCOME_SHARED += inc.amount;
       }
   });
 
-  entries.forEach(entry => {
+  filteredEntries.forEach(entry => {
       if (monthMap.has(entry.monthId)) {
           const data = monthMap.get(entry.monthId)!;
           const cat = categories.find(c => c.id === entry.categoryId);
@@ -84,67 +111,49 @@ export const DashboardCharts: React.FC<DashboardChartsProps> = ({ entries, categ
   const barData = Array.from(monthMap.values()).sort((a, b) => a.month.localeCompare(b.month));
 
   // --- Wealth Calculation ---
-  let wealthU1 = 0;
-  let wealthU2 = 0;
-  let wealthShared = 0;
-
+  let wealthU1 = 0, wealthU2 = 0, wealthShared = 0;
   const wealthData = barData.map(item => {
       wealthU1 += item.SAVINGS_U1;
       wealthU2 += item.SAVINGS_U2;
       wealthShared += item.SAVINGS_SHARED;
-      
       return {
           month: item.month,
           totalWealth: wealthU1 + wealthU2 + wealthShared,
-          wealthU1,
-          wealthU2,
-          wealthShared,
-          monthlySave: item.SAVINGS
+          wealthU1, wealthU2, wealthShared
       };
   });
-
+  
   const totalAccumulatedWealth = wealthData.length > 0 ? wealthData[wealthData.length - 1].totalWealth : 0;
 
-  const catMap = new Map<string, number>();
-  entries.forEach(entry => {
-      const cat = categories.find(c => c.id === entry.categoryId);
-      if (cat && cat.group !== 'SAVINGS') {
-          const name = cat.name;
-          catMap.set(name, (catMap.get(name) || 0) + entry.amount);
-      }
-  });
-
-  const pieData = Array.from(catMap.entries())
-    .map(([name, value]) => ({ name, value }))
-    .sort((a, b) => b.value - a.value)
-    .slice(0, 10);
-
-  const COLORS = ['#6366f1', '#ec4899', '#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4', '#f97316', '#84cc16'];
-
+  // --- Top Expenses Logic ---
   const totals = useMemo(() => {
       const t = { SHARED: 0, USER_1: 0, USER_2: 0 };
       entries.forEach(e => {
           const cat = categories.find(c => c.id === e.categoryId);
           if (cat?.group !== 'SAVINGS') {
-              if (t[e.account] !== undefined) {
-                  t[e.account] += e.amount;
-              }
+              t[e.account] += e.amount;
           }
       });
       return t;
   }, [entries, categories]);
 
-  // --- Grouping Logic ---
+  const incomeTotals = useMemo(() => {
+      return incomes.reduce((acc, i) => {
+          if (i.recipient === 'USER_1') acc.USER_1 += i.amount;
+          else if (i.recipient === 'USER_2') acc.USER_2 += i.amount;
+          else acc.SHARED += i.amount;
+          return acc;
+      }, { SHARED: 0, USER_1: 0, USER_2: 0 });
+  }, [incomes]);
+
   const groupEntries = (filteredEntries: ExpenseEntry[], groupBy: 'CATEGORY' | 'CONSECUTIVE') => {
       if (groupBy === 'CATEGORY') {
-          const map = new Map<string, { key: string, name: string, amount: number, account: AccountType, count: number, entries: ExpenseEntry[] }>();
+          const map = new Map<string, any>();
           filteredEntries.forEach(e => {
               const cat = categories.find(c => c.id === e.categoryId);
               const key = cat?.name || 'Unknown';
-              if (!map.has(key)) {
-                  map.set(key, { key, name: key, amount: 0, account: e.account, count: 0, entries: [] });
-              }
-              const item = map.get(key)!;
+              if (!map.has(key)) map.set(key, { key, name: key, amount: 0, account: e.account, count: 0, entries: [] });
+              const item = map.get(key);
               item.amount += e.amount;
               item.count += 1;
               item.entries.push(e);
@@ -152,18 +161,9 @@ export const DashboardCharts: React.FC<DashboardChartsProps> = ({ entries, categ
           return Array.from(map.values()).sort((a, b) => b.amount - a.amount);
       } else {
           const sorted = [...filteredEntries].sort((a, b) => b.monthId.localeCompare(a.monthId));
-          const groups: { key: string, name: string, amount: number, total: number, entries: ExpenseEntry[], account: AccountType }[] = [];
+          const groups: any[] = [];
           if (sorted.length === 0) return [];
-
-          let current = {
-              key: sorted[0].id,
-              name: categories.find(c => c.id === sorted[0].categoryId)?.name || 'Unknown',
-              amount: sorted[0].amount,
-              total: sorted[0].amount,
-              entries: [sorted[0]],
-              account: sorted[0].account
-          };
-
+          let current = { key: sorted[0].id, name: categories.find(c => c.id === sorted[0].categoryId)?.name || 'Unknown', amount: sorted[0].amount, total: sorted[0].amount, entries: [sorted[0]], account: sorted[0].account };
           for (let i = 1; i < sorted.length; i++) {
               const e = sorted[i];
               const name = categories.find(c => c.id === e.categoryId)?.name || 'Unknown';
@@ -180,69 +180,106 @@ export const DashboardCharts: React.FC<DashboardChartsProps> = ({ entries, categ
       }
   };
 
-  const fixedExpenses = useMemo(() => {
-      return groupEntries(entries.filter(e => categories.find(c => c.id === e.categoryId)?.group === 'FIXED'), 'CATEGORY');
-  }, [entries, categories]);
+  const fixedExpenses = useMemo(() => groupEntries(filteredEntries.filter(e => categories.find(c => c.id === e.categoryId)?.group === 'FIXED'), 'CATEGORY'), [filteredEntries, categories]);
+  const variableExpenses = useMemo(() => groupEntries(filteredEntries.filter(e => { const g = categories.find(c => c.id === e.categoryId)?.group; return g !== 'FIXED' && g !== 'SAVINGS'; }), 'CONSECUTIVE'), [filteredEntries, categories]);
 
-  const variableExpenses = useMemo(() => {
-      return groupEntries(entries.filter(e => {
-          const g = categories.find(c => c.id === e.categoryId)?.group;
-          return g !== 'FIXED' && g !== 'SAVINGS';
-      }), 'CONSECUTIVE');
-  }, [entries, categories]);
+  const pieData = Array.from(
+      filteredEntries.reduce((map, e) => {
+          const cat = categories.find(c => c.id === e.categoryId);
+          if (cat && cat.group !== 'SAVINGS') map.set(cat.name, (map.get(cat.name) || 0) + e.amount);
+          return map;
+      }, new Map<string, number>()).entries()
+  ).map(([name, value]) => ({ name, value })).sort((a, b) => b.value - a.value).slice(0, 10);
+  
+  const totalPieValue = pieData.reduce((sum, item) => sum + item.value, 0);
 
-  const toggleGroup = (key: string) => {
-      setExpandedGroupId(prev => prev === key ? null : key);
-  };
+  const COLORS = ['#6366f1', '#ec4899', '#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4', '#f97316', '#84cc16'];
 
-  const handleLegendClick = (dataKey: any) => {
-      setVisibleBars(prev => ({ ...prev, [dataKey]: !prev[dataKey] }));
-  };
-
+  const toggleGroup = (key: string) => setExpandedGroupId(prev => prev === key ? null : key);
+  const handleLegendClick = (dataKey: string) => setVisibleBars(prev => ({ ...prev, [dataKey]: !prev[dataKey] }));
   const renderAccountLabel = (account: AccountType) => {
       const label = account === 'SHARED' ? 'Shared' : account === 'USER_1' ? users.user_1.name : users.user_2.name;
-      const bg = account === 'SHARED' ? 'bg-purple-100 text-purple-700' : account === 'USER_1' ? 'bg-blue-100 text-blue-700' : 'bg-pink-100 text-pink-700';
-      return <span className={`text-[10px] px-1.5 py-0.5 rounded font-bold ml-2 ${bg}`}>{label}</span>;
+      const color = account === 'SHARED' ? users.shared?.color : account === 'USER_1' ? users.user_1.color : users.user_2.color;
+      
+      // We can use style for dynamic color
+      return <span className="text-[10px] px-1.5 py-0.5 rounded font-bold ml-2 text-white" style={{ backgroundColor: color || '#64748b' }}>{label}</span>;
   };
 
   return (
     <div className="space-y-6">
         
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex items-center justify-between">
-                <div><p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Total Shared</p><p className="text-xl font-bold text-slate-800">{formatCurrency(totals.SHARED, currency)}</p></div>
-                <div className="w-10 h-10 rounded-full bg-purple-100 flex items-center justify-center text-purple-600"><Users size={20} /></div>
-            </div>
-            <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex items-center justify-between">
-                <div><p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Total {users.user_1.name}</p><p className="text-xl font-bold text-slate-800">{formatCurrency(totals.USER_1, currency)}</p></div>
-                <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center text-blue-600"><UserIcon size={20} /></div>
-            </div>
-            <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex items-center justify-between">
-                <div><p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Total {users.user_2.name}</p><p className="text-xl font-bold text-slate-800">{formatCurrency(totals.USER_2, currency)}</p></div>
-                <div className="w-10 h-10 rounded-full bg-pink-100 flex items-center justify-center text-pink-600"><UserIcon size={20} /></div>
-            </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            {[{title: 'Overall', income: incomeTotals.SHARED + incomeTotals.USER_1 + incomeTotals.USER_2, expense: totals.SHARED + totals.USER_1 + totals.USER_2, icon: Wallet, color: '#6366f1', id: 'ALL', desc: 'Total of all shared and personal expenses combined.'},
+              {title: 'Shared', income: incomeTotals.SHARED, expense: totals.SHARED, icon: Users, color: users.shared?.color || '#a855f7', id: 'SHARED', desc: 'Shared account activity.', avatar: users.shared?.avatar}, 
+              {title: users.user_1.name, income: incomeTotals.USER_1, expense: totals.USER_1, icon: UserIcon, color: users.user_1.color, id: 'USER_1', desc: `${users.user_1.name}'s personal activity.`, avatar: users.user_1.avatar}, 
+              {title: users.user_2.name, income: incomeTotals.USER_2, expense: totals.USER_2, icon: UserIcon, color: users.user_2.color, id: 'USER_2', desc: `${users.user_2.name}'s personal activity.`, avatar: users.user_2.avatar}].map((card, idx) => (
+                <button 
+                    key={idx} 
+                    title={card.desc}
+                    onClick={() => setActiveFilter(card.id as AccountType | 'ALL')}
+                    className={`bg-white p-4 rounded-xl border shadow-sm flex flex-col justify-between transition-all w-full text-left h-full ${activeFilter === card.id ? 'ring-2 scale-[1.02]' : 'hover:shadow-md'}`}
+                    style={{ borderColor: activeFilter === card.id ? card.color : '#e2e8f0', boxShadow: activeFilter === card.id ? `0 0 0 2px ${card.color}20` : '' }}
+                >
+                    <div className="flex items-center gap-3 mb-3">
+                        <div 
+                            className="w-8 h-8 rounded-full flex items-center justify-center overflow-hidden shadow-sm border border-slate-100"
+                            style={{ backgroundColor: `${card.color}20`, color: card.color }}
+                        >
+                            {card.avatar ? <img src={card.avatar} className="w-full h-full object-cover" alt={card.title} /> : <card.icon size={16} />}
+                        </div>
+                        <p className="text-xs font-bold uppercase tracking-wider" style={{ color: '#94a3b8' }}>{card.title}</p>
+                    </div>
+                    
+                    <div className="space-y-1">
+                        <div className="flex justify-between items-end">
+                            <span className="text-[10px] font-medium text-slate-400">Income</span>
+                            <span className="text-sm font-bold" style={{ color: card.color, opacity: 0.8 }}>{formatCurrency(card.income, currency)}</span>
+                        </div>
+                        <div className="flex justify-between items-end">
+                            <span className="text-[10px] font-medium text-slate-400">Expense</span>
+                            <span className="text-sm font-bold" style={{ color: card.color }}>{formatCurrency(card.expense, currency)}</span>
+                        </div>
+                    </div>
+                </button>
+            ))}
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            {/* Income vs Expenses Chart */}
             <div className="lg:col-span-2 bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
                 <h3 className="text-lg font-bold text-slate-800 mb-6">Income vs Expenses Trend</h3>
                 <div className="h-72 w-full">
                     <ResponsiveContainer width="100%" height="100%">
-                        <BarChart data={barData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+                        <BarChart data={barData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }} barGap={4} barCategoryGap="20%">
                             <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                            <XAxis dataKey="month" axisLine={false} tickLine={false} tick={{fill: '#64748b', fontSize: 12}} tickFormatter={(val) => { const [y, m] = val.split('-'); return new Date(parseInt(y), parseInt(m) - 1).toLocaleDateString('default', { month: 'short' }); }} />
-                            <YAxis axisLine={false} tickLine={false} tick={{fill: '#64748b', fontSize: 12}} tickFormatter={(val) => `${val/1000}k`} />
-                            <Tooltip contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }} cursor={{fill: '#f8fafc'}} />
-                            <Legend iconType="circle" onClick={(e) => handleLegendClick(e.dataKey)} cursor="pointer" />
-                            <Bar dataKey="INCOME" name="Total Income" fill="#10b981" radius={[4, 4, 0, 0]} barSize={12} hide={!visibleBars.INCOME} />
-                            <Bar dataKey="SHARED" name="Shared Exp" stackId="exp" fill="#a855f7" radius={[0, 0, 0, 0]} hide={!visibleBars.SHARED} />
-                            <Bar dataKey="USER_1" name={`${users.user_1.name} Exp`} stackId="exp" fill="#3b82f6" radius={[0, 0, 0, 0]} hide={!visibleBars.USER_1} />
-                            <Bar dataKey="USER_2" name={`${users.user_2.name} Exp`} stackId="exp" fill="#ec4899" radius={[4, 4, 0, 0]} hide={!visibleBars.USER_2} />
+                            <XAxis dataKey="month" axisLine={false} tickLine={false} tick={{fill: '#64748b', fontSize: 10}} tickFormatter={(val) => { const [y, m] = val.split('-'); return new Date(parseInt(y), parseInt(m) - 1).toLocaleDateString('default', { month: 'short' }); }} />
+                            <YAxis axisLine={false} tickLine={false} tick={{fill: '#64748b', fontSize: 10}} tickFormatter={(val) => `${val/1000}k`} />
+                            <Tooltip content={<CustomTooltip currency={currency} />} cursor={{fill: '#f8fafc'}} />
+                            <Legend 
+                                verticalAlign="top" 
+                                align="right" 
+                                iconSize={8}
+                                wrapperStyle={{ fontSize: '10px', paddingBottom: '20px' }}
+                                iconType="circle" 
+                                onClick={(e) => handleLegendClick(e.dataKey)} 
+                                cursor="pointer" 
+                            />
+                            
+                            {/* Stack 1: Income (Side A) - Using Alpha for Income distinction */}
+                            <Bar dataKey="INCOME_SHARED" name="Shared Income" stackId="income" fill={users.shared?.color} fillOpacity={0.3} hide={!visibleBars.INCOME_SHARED} />
+                            <Bar dataKey="INCOME_U1" name={`${users.user_1.name} Income`} stackId="income" fill={users.user_1.color} fillOpacity={0.3} hide={!visibleBars.INCOME_U1} />
+                            <Bar dataKey="INCOME_U2" name={`${users.user_2.name} Income`} stackId="income" fill={users.user_2.color} fillOpacity={0.3} radius={[4, 4, 0, 0]} hide={!visibleBars.INCOME_U2} />
+                            
+                            {/* Stack 2: Expenses (Side B) - Solid colors for Expenses */}
+                            <Bar dataKey="SHARED" name="Shared Exp" stackId="exp" fill={users.shared?.color} hide={!visibleBars.SHARED} />
+                            <Bar dataKey="USER_1" name={`${users.user_1.name} Exp`} stackId="exp" fill={users.user_1.color} hide={!visibleBars.USER_1} />
+                            <Bar dataKey="USER_2" name={`${users.user_2.name} Exp`} stackId="exp" fill={users.user_2.color} radius={[4, 4, 0, 0]} hide={!visibleBars.USER_2} />
                         </BarChart>
                     </ResponsiveContainer>
                 </div>
             </div>
 
+            {/* Wealth Chart */}
             <div className="lg:col-span-1 bg-white p-6 rounded-2xl shadow-sm border border-slate-200 flex flex-col">
                 <h3 className="text-lg font-bold text-slate-800 mb-2">Net Worth Growth</h3>
                 <p className="text-xs text-slate-400 mb-4">Cumulative savings & investments</p>
@@ -250,17 +287,17 @@ export const DashboardCharts: React.FC<DashboardChartsProps> = ({ entries, categ
                     <ResponsiveContainer width="100%" height="100%">
                         <AreaChart data={wealthData} margin={{ top: 10, right: 0, left: -20, bottom: 0 }}>
                             <defs>
-                                <linearGradient id="colorU1" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#3b82f6" stopOpacity={0.2}/><stop offset="95%" stopColor="#3b82f6" stopOpacity={0}/></linearGradient>
-                                <linearGradient id="colorU2" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#ec4899" stopOpacity={0.2}/><stop offset="95%" stopColor="#ec4899" stopOpacity={0}/></linearGradient>
-                                <linearGradient id="colorShared" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#a855f7" stopOpacity={0.2}/><stop offset="95%" stopColor="#a855f7" stopOpacity={0}/></linearGradient>
+                                <linearGradient id="colorU1" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor={users.user_1.color} stopOpacity={0.4}/><stop offset="95%" stopColor={users.user_1.color} stopOpacity={0}/></linearGradient>
+                                <linearGradient id="colorU2" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor={users.user_2.color} stopOpacity={0.4}/><stop offset="95%" stopColor={users.user_2.color} stopOpacity={0}/></linearGradient>
+                                <linearGradient id="colorShared" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor={users.shared?.color} stopOpacity={0.4}/><stop offset="95%" stopColor={users.shared?.color} stopOpacity={0}/></linearGradient>
                             </defs>
                             <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
                             <XAxis dataKey="month" hide />
                             <YAxis axisLine={false} tickLine={false} tick={{fontSize: 10}} domain={['auto', 'auto']} />
                             <Tooltip formatter={(value: number) => formatCurrency(value, currency)} />
-                            <Area type="monotone" dataKey="wealthShared" name="Shared Wealth" stackId="1" stroke="#a855f7" strokeWidth={2} fillOpacity={1} fill="url(#colorShared)" />
-                            <Area type="monotone" dataKey="wealthU1" name={`${users.user_1.name} Wealth`} stackId="1" stroke="#3b82f6" strokeWidth={2} fillOpacity={1} fill="url(#colorU1)" />
-                            <Area type="monotone" dataKey="wealthU2" name={`${users.user_2.name} Wealth`} stackId="1" stroke="#ec4899" strokeWidth={2} fillOpacity={1} fill="url(#colorU2)" />
+                            <Area type="monotone" dataKey="wealthShared" name="Shared Wealth" stackId="1" stroke={users.shared?.color} strokeWidth={2} fillOpacity={1} fill="url(#colorShared)" />
+                            <Area type="monotone" dataKey="wealthU1" name={`${users.user_1.name} Wealth`} stackId="1" stroke={users.user_1.color} strokeWidth={2} fillOpacity={1} fill="url(#colorU1)" />
+                            <Area type="monotone" dataKey="wealthU2" name={`${users.user_2.name} Wealth`} stackId="1" stroke={users.user_2.color} strokeWidth={2} fillOpacity={1} fill="url(#colorU2)" />
                         </AreaChart>
                     </ResponsiveContainer>
                 </div>
@@ -272,40 +309,78 @@ export const DashboardCharts: React.FC<DashboardChartsProps> = ({ entries, categ
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+             {/* Pie Chart */}
              <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
                  <div className="flex justify-between items-center mb-4">
                     <h3 className="font-bold text-slate-800">Where does the money go?</h3>
                  </div>
                  <div className="flex flex-col sm:flex-row items-center gap-6 h-64"> 
-                     <div className="h-full w-48 relative shrink-0">
+                     <div className="h-full w-56 relative shrink-0">
                          <ResponsiveContainer width="100%" height="100%">
                             <PieChart>
                                 <Pie 
+                                    activeIndex={pieActiveIndex}
+                                    activeShape={(props: any) => {
+                                        const { cx, cy, innerRadius, outerRadius, startAngle, endAngle, fill, payload, value } = props;
+                                        return (
+                                            <g>
+                                                <text x={cx} y={cy} dy={-6} textAnchor="middle" fill="#64748b" fontSize={9} fontWeight="bold">
+                                                    {payload.name.length > 12 ? `${payload.name.substring(0, 12)}...` : payload.name}
+                                                </text>
+                                                <text x={cx} y={cy} dy={10} textAnchor="middle" fill="#334155" fontSize={11} fontWeight="bold">
+                                                    {`${((value / totalPieValue) * 100).toFixed(1)}%`}
+                                                </text>
+                                                <Sector
+                                                    cx={cx}
+                                                    cy={cy}
+                                                    innerRadius={innerRadius}
+                                                    outerRadius={outerRadius + 4}
+                                                    startAngle={startAngle}
+                                                    endAngle={endAngle}
+                                                    fill={fill}
+                                                />
+                                                <Sector
+                                                    cx={cx}
+                                                    cy={cy}
+                                                    startAngle={startAngle}
+                                                    endAngle={endAngle}
+                                                    innerRadius={outerRadius + 6}
+                                                    outerRadius={outerRadius + 8}
+                                                    fill={fill}
+                                                />
+                                            </g>
+                                        );
+                                    }}
                                     data={pieData} 
                                     cx="50%" 
                                     cy="50%" 
-                                    innerRadius={60} 
-                                    outerRadius={80} 
+                                    innerRadius={70} 
+                                    outerRadius={90} 
                                     paddingAngle={4} 
                                     dataKey="value"
                                     cornerRadius={4}
+                                    onMouseEnter={(_, index) => setPieActiveIndex(index)}
                                 >
                                     {pieData.map((entry, index) => <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} strokeWidth={0} />)}
                                 </Pie>
                             </PieChart>
                          </ResponsiveContainer>
-                         <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-                            <span className="text-xs text-slate-400 font-medium uppercase tracking-widest">Top 10</span>
-                         </div>
                      </div>
-                     <div className="flex-1 w-full space-y-2 overflow-y-auto max-h-full pr-2 custom-scrollbar">
+                     <div className="flex-1 w-full space-y-1.5 overflow-y-auto max-h-full pr-2 custom-scrollbar">
                          {pieData.map((entry, index) => (
-                             <div key={index} className="flex justify-between items-center text-xs">
+                             <div 
+                                key={index} 
+                                className={`flex justify-between items-center p-1.5 rounded-lg cursor-pointer transition ${index === pieActiveIndex ? 'bg-slate-50 ring-1 ring-slate-200' : 'hover:bg-slate-50'}`}
+                                onMouseEnter={() => setPieActiveIndex(index)}
+                             >
                                  <div className="flex items-center gap-2">
-                                     <div className="w-2 h-2 rounded-full" style={{ backgroundColor: COLORS[index % COLORS.length] }}></div>
-                                     <span className="text-slate-600 truncate max-w-[120px] font-medium">{entry.name}</span>
+                                     <div className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: COLORS[index % COLORS.length] }}></div>
+                                     <span className="text-slate-600 truncate max-w-[120px] font-medium text-[11px]">{entry.name}</span>
                                  </div>
-                                 <span className="font-bold text-slate-800">{formatCurrency(entry.value, currency)}</span>
+                                 <div className="flex items-center gap-3">
+                                    <span className="text-slate-400 font-medium text-[9px] bg-slate-100 px-1 py-0.5 rounded">{((entry.value / totalPieValue) * 100).toFixed(1)}%</span>
+                                    <span className="font-bold text-slate-800 text-[11px]">{formatCurrency(entry.value, currency)}</span>
+                                 </div>
                              </div>
                          ))}
                      </div>
@@ -313,7 +388,7 @@ export const DashboardCharts: React.FC<DashboardChartsProps> = ({ entries, categ
              </div>
 
              <div className="space-y-6">
-                 {/* Fixed Expenses Card */}
+                 {/* Fixed Expenses */}
                  <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
                      <h3 className="font-bold text-slate-800 mb-4 flex items-center gap-2">
                          <Wallet size={18} className="text-slate-400"/> Fixed & Recurring
@@ -323,18 +398,11 @@ export const DashboardCharts: React.FC<DashboardChartsProps> = ({ entries, categ
                              const isExpanded = expandedGroupId === group.key;
                              return (
                                  <div key={idx} className="border-b border-slate-50 last:border-0 pb-2">
-                                     <div 
-                                        onClick={() => toggleGroup(group.key)}
-                                        className="flex justify-between items-center cursor-pointer hover:bg-slate-50 p-1.5 -m-1.5 rounded-lg transition"
-                                     >
+                                     <div onClick={() => toggleGroup(group.key)} className="flex justify-between items-center cursor-pointer hover:bg-slate-50 p-1.5 -m-1.5 rounded-lg transition">
                                          <div>
                                              <div className="flex items-center gap-2">
                                                  <span className="font-semibold text-slate-700 text-sm">{group.name}</span>
-                                                 {group.count > 1 && (
-                                                     <div className="text-slate-400">
-                                                         {isExpanded ? <ChevronUp size={12}/> : <ChevronDown size={12}/>}
-                                                     </div>
-                                                 )}
+                                                 {group.count > 1 && <div className="text-slate-400">{isExpanded ? <ChevronUp size={12}/> : <ChevronDown size={12}/>}</div>}
                                              </div>
                                              <div className="flex items-center gap-2 text-[10px] text-slate-400">
                                                  {group.count} transactions {renderAccountLabel(group.account)}
@@ -344,11 +412,8 @@ export const DashboardCharts: React.FC<DashboardChartsProps> = ({ entries, categ
                                      </div>
                                      {isExpanded && (
                                          <div className="bg-slate-50 rounded-lg p-3 mt-2 text-xs space-y-2 animate-in fade-in slide-in-from-top-1">
-                                             {group.entries.map((e, subIdx) => (
-                                                 <div key={e.id} className="flex justify-between text-slate-500">
-                                                     <span>{e.monthId}</span>
-                                                     <span className="font-medium">{formatCurrency(e.amount, currency)}</span>
-                                                 </div>
+                                             {group.entries.map((e: any) => (
+                                                 <div key={e.id} className="flex justify-between text-slate-500"><span>{e.monthId}</span><span className="font-medium">{formatCurrency(e.amount, currency)}</span></div>
                                              ))}
                                          </div>
                                      )}
@@ -359,7 +424,7 @@ export const DashboardCharts: React.FC<DashboardChartsProps> = ({ entries, categ
                      </div>
                  </div>
 
-                 {/* Variable Expenses Card */}
+                 {/* Variable Expenses */}
                  <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
                      <h3 className="font-bold text-slate-800 mb-4 flex items-center gap-2">
                          <ChevronUp size={18} className="text-slate-400"/> Top Variable Spending
@@ -368,42 +433,25 @@ export const DashboardCharts: React.FC<DashboardChartsProps> = ({ entries, categ
                          {variableExpenses.map((group, idx) => {
                              const isExpanded = expandedGroupId === group.key;
                              const count = group.entries.length;
-
                              return (
                                  <div key={group.key} className="border-b border-slate-50 last:border-0 pb-2">
-                                     <div 
-                                        onClick={() => count > 1 && toggleGroup(group.key)}
-                                        className={`flex items-center justify-between py-1.5 cursor-pointer ${count > 1 ? 'hover:bg-slate-50 rounded-lg px-1.5 -mx-1.5 transition' : ''}`}
-                                     >
+                                     <div onClick={() => count > 1 && toggleGroup(group.key)} className={`flex items-center justify-between py-1.5 cursor-pointer ${count > 1 ? 'hover:bg-slate-50 rounded-lg px-1.5 -mx-1.5 transition' : ''}`}>
                                          <div className="flex items-center gap-3">
                                              <div className="text-xs font-bold text-slate-300 w-4">#{idx+1}</div>
                                              <div>
-                                                 <span className="block text-sm font-semibold text-slate-700">
-                                                     {group.catName} {count > 1 && <span className="text-xs font-normal text-slate-400 ml-1">(x{count})</span>}
-                                                 </span>
-                                                 <div className="flex items-center mt-0.5">
-                                                     {renderAccountLabel(group.account)}
-                                                     {count === 1 && <span className="text-[10px] text-slate-400 ml-2">{group.entries[0].monthId}</span>}
-                                                 </div>
+                                                 <span className="block text-sm font-semibold text-slate-700">{group.catName} {count > 1 && <span className="text-xs font-normal text-slate-400 ml-1">(x{count})</span>}</span>
+                                                 <div className="flex items-center mt-0.5">{renderAccountLabel(group.account)}{count === 1 && <span className="text-[10px] text-slate-400 ml-2">{group.entries[0].monthId}</span>}</div>
                                              </div>
                                          </div>
                                          <div className="text-right">
                                              <span className="block font-bold text-slate-800 text-sm">{formatCurrency(group.total, currency)}</span>
-                                             {count > 1 && (
-                                                 <div className="text-slate-400 flex justify-end mt-0.5">
-                                                     {isExpanded ? <ChevronUp size={12}/> : <ChevronDown size={12}/>}
-                                                 </div>
-                                             )}
+                                             {count > 1 && <div className="text-slate-400 flex justify-end mt-0.5">{isExpanded ? <ChevronUp size={12}/> : <ChevronDown size={12}/>}</div>}
                                          </div>
                                      </div>
-                                     
                                      {isExpanded && (
                                          <div className="bg-slate-50 rounded-lg p-3 mt-2 ml-7 text-xs space-y-2 animate-in fade-in slide-in-from-top-1">
-                                             {group.entries.map((e, subIdx) => (
-                                                 <div key={e.id} className="flex justify-between text-slate-500">
-                                                     <span>{e.monthId} • {e.description || 'Entry'}</span>
-                                                     <span className="font-medium">{formatCurrency(e.amount, currency)}</span>
-                                                 </div>
+                                             {group.entries.map((e: any) => (
+                                                 <div key={e.id} className="flex justify-between text-slate-500"><span>{e.monthId} • {e.description || 'Entry'}</span><span className="font-medium">{formatCurrency(e.amount, currency)}</span></div>
                                              ))}
                                          </div>
                                      )}

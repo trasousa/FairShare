@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { User, UserId, CurrencyCode } from '../types';
-import { Save, User as UserIcon, Upload, RotateCcw, Download, Database, Sun, Moon, LogOut } from 'lucide-react';
+import { Save, User as UserIcon, Upload, RotateCcw, Download, Database, Sun, Moon, LogOut, Users } from 'lucide-react';
 
 interface SettingsPageProps {
   users: Record<string, User>;
@@ -17,6 +17,8 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ users, currency, the
   const [localUsers, setLocalUsers] = useState(users);
   const [successMsg, setSuccessMsg] = useState('');
 
+  const PRESET_COLORS = ['#64748b', '#ef4444', '#f97316', '#f59e0b', '#10b981', '#14b8a6', '#06b6d4', '#3b82f6', '#6366f1', '#8b5cf6', '#a855f7', '#d946ef', '#ec4899', '#f43f5e'];
+
   const handleChange = (id: UserId, field: keyof User, value: any) => {
     setLocalUsers(prev => ({
         ...prev,
@@ -30,6 +32,13 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ users, currency, the
       });
       setSuccessMsg('Settings saved successfully!');
       setTimeout(() => setSuccessMsg(''), 3000);
+  };
+
+  const getAvailableColors = (currentId: string) => {
+      const usedColors = Object.values(localUsers)
+          .filter(u => u.id !== currentId && u.color)
+          .map(u => u.color);
+      return PRESET_COLORS.filter(c => !usedColors.includes(c));
   };
 
   return (
@@ -98,6 +107,64 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ users, currency, the
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+            {/* Shared Account Card */}
+            {localUsers.shared && (
+                <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm relative overflow-hidden md:col-span-2">
+                    <div className="absolute top-0 left-0 w-full h-1" style={{ backgroundColor: localUsers.shared.color }}></div>
+                    <h3 className="font-bold text-slate-800 mb-6 flex items-center gap-2">
+                        <Users size={18} style={{ color: localUsers.shared.color }}/> Shared Account
+                    </h3>
+                    
+                    <div className="space-y-4">
+                        <div className="flex items-center gap-4">
+                            <img src={localUsers.shared.avatar} className="w-16 h-16 rounded-full border-2 border-slate-100 object-cover" />
+                            <div className="flex-1">
+                                <label className="block text-xs font-semibold text-slate-500 mb-1">Avatar URL</label>
+                                <input 
+                                    type="text" 
+                                    value={localUsers.shared.avatar}
+                                    onChange={(e) => handleChange('shared', 'avatar', e.target.value)}
+                                    className="w-full text-xs border border-slate-300 rounded p-2 text-slate-600"
+                                />
+                            </div>
+                        </div>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div>
+                                <label className="block text-sm font-medium text-slate-700 mb-1">Name</label>
+                                <input 
+                                    type="text" 
+                                    value={localUsers.shared.name}
+                                    onChange={(e) => handleChange('shared', 'name', e.target.value)}
+                                    className="w-full border border-slate-300 rounded-lg p-2.5 focus:ring-2 focus:ring-indigo-100 outline-none"
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium text-slate-700 mb-2">Theme Color</label>
+                                <div className="flex flex-wrap gap-2">
+                                    {getAvailableColors('shared').map(c => (
+                                        <button 
+                                            key={c}
+                                            onClick={() => handleChange('shared', 'color', c)}
+                                            className={`w-6 h-6 rounded-full border-2 transition ${localUsers.shared?.color === c ? 'border-slate-600 scale-110' : 'border-transparent hover:scale-110'}`}
+                                            style={{ backgroundColor: c }}
+                                        />
+                                    ))}
+                                    <div className="relative w-6 h-6 rounded-full overflow-hidden border border-slate-200 ml-2 shadow-sm" title="Custom Color">
+                                        <input 
+                                            type="color" 
+                                            value={localUsers.shared.color}
+                                            onChange={(e) => handleChange('shared', 'color', e.target.value)}
+                                            className="absolute inset-0 w-10 h-10 -top-2 -left-2 cursor-pointer opacity-0"
+                                        />
+                                        <div className="w-full h-full" style={{ backgroundColor: localUsers.shared.color }}></div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
             {/* User 1 Card */}
             <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm relative overflow-hidden">
                 <div className="absolute top-0 left-0 w-full h-1" style={{ backgroundColor: localUsers.user_1.color }}></div>
@@ -128,15 +195,25 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ users, currency, the
                         />
                     </div>
                     <div>
-                        <label className="block text-sm font-medium text-slate-700 mb-1">Theme Color</label>
-                        <div className="flex items-center gap-3">
-                            <input 
-                                type="color" 
-                                value={localUsers.user_1.color}
-                                onChange={(e) => handleChange('user_1', 'color', e.target.value)}
-                                className="h-10 w-20 p-1 border border-slate-300 rounded cursor-pointer"
-                            />
-                            <span className="text-xs text-slate-500">{localUsers.user_1.color}</span>
+                        <label className="block text-sm font-medium text-slate-700 mb-2">Theme Color</label>
+                        <div className="flex flex-wrap gap-2">
+                            {getAvailableColors('user_1').map(c => (
+                                <button 
+                                    key={c}
+                                    onClick={() => handleChange('user_1', 'color', c)}
+                                    className={`w-6 h-6 rounded-full border-2 transition ${localUsers.user_1.color === c ? 'border-slate-600 scale-110' : 'border-transparent hover:scale-110'}`}
+                                    style={{ backgroundColor: c }}
+                                />
+                            ))}
+                            <div className="relative w-6 h-6 rounded-full overflow-hidden border border-slate-200 ml-2 shadow-sm" title="Custom Color">
+                                <input 
+                                    type="color" 
+                                    value={localUsers.user_1.color}
+                                    onChange={(e) => handleChange('user_1', 'color', e.target.value)}
+                                    className="absolute inset-0 w-10 h-10 -top-2 -left-2 cursor-pointer opacity-0"
+                                />
+                                <div className="w-full h-full" style={{ backgroundColor: localUsers.user_1.color }}></div>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -172,15 +249,25 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ users, currency, the
                         />
                     </div>
                     <div>
-                        <label className="block text-sm font-medium text-slate-700 mb-1">Theme Color</label>
-                        <div className="flex items-center gap-3">
-                            <input 
-                                type="color" 
-                                value={localUsers.user_2.color}
-                                onChange={(e) => handleChange('user_2', 'color', e.target.value)}
-                                className="h-10 w-20 p-1 border border-slate-300 rounded cursor-pointer"
-                            />
-                            <span className="text-xs text-slate-500">{localUsers.user_2.color}</span>
+                        <label className="block text-sm font-medium text-slate-700 mb-2">Theme Color</label>
+                        <div className="flex flex-wrap gap-2">
+                            {getAvailableColors('user_2').map(c => (
+                                <button 
+                                    key={c}
+                                    onClick={() => handleChange('user_2', 'color', c)}
+                                    className={`w-6 h-6 rounded-full border-2 transition ${localUsers.user_2.color === c ? 'border-slate-600 scale-110' : 'border-transparent hover:scale-110'}`}
+                                    style={{ backgroundColor: c }}
+                                />
+                            ))}
+                            <div className="relative w-6 h-6 rounded-full overflow-hidden border border-slate-200 ml-2 shadow-sm" title="Custom Color">
+                                <input 
+                                    type="color" 
+                                    value={localUsers.user_2.color}
+                                    onChange={(e) => handleChange('user_2', 'color', e.target.value)}
+                                    className="absolute inset-0 w-10 h-10 -top-2 -left-2 cursor-pointer opacity-0"
+                                />
+                                <div className="w-full h-full" style={{ backgroundColor: localUsers.user_2.color }}></div>
+                            </div>
                         </div>
                     </div>
                 </div>

@@ -44,6 +44,8 @@ interface AppProps {
 
 function App({ instanceId, onExit }: AppProps) {
   const [loading, setLoading] = useState(true);
+  const [easterEggCount, setEasterEggCount] = useState(0);
+  const [showEasterEgg, setShowEasterEgg] = useState(false);
   const [instanceName, setInstanceName] = useState('');
   const [saveStatus, setSaveStatus] = useState<SaveStatus>('saved');
   
@@ -98,7 +100,11 @@ function App({ instanceId, onExit }: AppProps) {
         const data = await getInstance(instanceId);
         if (data) {
             setInstanceName(data.name);
-            setUsers(data.users);
+            const loadedUsers = data.users;
+            if (!loadedUsers.shared) {
+                loadedUsers.shared = { id: 'shared', name: 'Shared Account', avatar: 'https://api.dicebear.com/7.x/icons/svg?seed=Shared', monthlyIncome: 0, color: '#64748b' };
+            }
+            setUsers(loadedUsers);
             setCurrency(data.currency);
             setTheme(data.theme || 'light');
             setEntries(data.data.entries);
@@ -156,8 +162,20 @@ function App({ instanceId, onExit }: AppProps) {
       setCurrentMonth(newMonth);
   };
 
-  const [yearStr, monthStr] = currentMonth.split('-');
-  const monthLabel = new Date(parseInt(yearStr), parseInt(monthStr) - 1).toLocaleString('default', { month: 'long', year: 'numeric' });
+  const getMonthLabel = (dateStr: string) => {
+      try {
+          if (!dateStr) return 'Select Date';
+          const parts = dateStr.split('-');
+          if (parts.length !== 2) return dateStr;
+          const [y, m] = parts.map(Number);
+          if (isNaN(y) || isNaN(m)) return dateStr;
+          return new Date(y, m - 1).toLocaleString('default', { month: 'long', year: 'numeric' });
+      } catch (e) {
+          return dateStr;
+      }
+  };
+
+  const monthLabel = getMonthLabel(currentMonth);
 
   const currentTotalIncome = useMemo(() => {
       if (!users.user_1) return 0;
@@ -236,7 +254,17 @@ function App({ instanceId, onExit }: AppProps) {
       <header className={`fixed top-0 left-0 right-0 h-16 border-b px-4 lg:px-8 flex items-center justify-between z-40 ${navBarClass}`}>
            <div className="flex items-center gap-8">
                <div className="flex items-center gap-3">
-                   <div className="w-8 h-8 bg-indigo-600 rounded-lg flex items-center justify-center font-bold text-white shadow-lg shadow-indigo-500/30">FS</div>
+                   <div 
+                        onClick={() => {
+                            if (easterEggCount + 1 >= 2) {
+                                setShowEasterEgg(true);
+                                setEasterEggCount(0);
+                            } else {
+                                setEasterEggCount(p => p + 1);
+                            }
+                        }}
+                        className="w-8 h-8 bg-indigo-600 rounded-lg flex items-center justify-center font-bold text-white shadow-lg shadow-indigo-500/30 cursor-pointer select-none transition-transform active:scale-95"
+                   >FS</div>
                    <span className={`font-bold text-lg hidden md:block ${theme === 'dark' ? 'text-white' : 'text-slate-800'}`}>FairShare</span>
                </div>
 
@@ -341,18 +369,27 @@ function App({ instanceId, onExit }: AppProps) {
         {/* Main Content Area */}
         <div className="pt-20 px-4 pb-24 lg:px-8 max-w-7xl mx-auto w-full space-y-6">
           <ErrorBoundary componentName="Main Content">
-            {activeMainTab === 'insights' && activeInsightsView === 'global' && (
-                <DashboardCharts entries={filteredDashboardEntries} categories={categories} incomes={filteredDashboardIncomes} users={users} currency={currency} />
-            )}
+            {activeMainTab === 'insights' && (
+                <>
+                    <div className={`flex md:hidden justify-center p-1 rounded-xl gap-2 mb-4 ${theme === 'dark' ? 'bg-white/5' : 'bg-slate-200'}`}>
+                        <button onClick={() => setActiveInsightsView('global')} className={`flex-1 py-2 text-xs font-bold rounded-lg ${activeInsightsView === 'global' ? 'bg-indigo-600 text-white' : 'text-slate-500'}`}>Global</button>
+                        <button onClick={() => setActiveInsightsView('monthly')} className={`flex-1 py-2 text-xs font-bold rounded-lg ${activeInsightsView === 'monthly' ? 'bg-indigo-600 text-white' : 'text-slate-500'}`}>Monthly</button>
+                    </div>
+                    
+                    {activeInsightsView === 'global' && (
+                        <DashboardCharts entries={filteredDashboardEntries} categories={categories} incomes={filteredDashboardIncomes} users={users} currency={currency} />
+                    )}
 
-            {activeMainTab === 'insights' && activeInsightsView === 'monthly' && (
-                <MonthlyDashboard currentMonth={currentMonth} entries={entries} budgets={budgets} categories={categories} savings={savings} incomes={incomes} users={users} currency={currency} />
+                    {activeInsightsView === 'monthly' && (
+                        <MonthlyDashboard currentMonth={currentMonth} entries={entries} budgets={budgets} categories={categories} savings={savings} incomes={incomes} users={users} currency={currency} />
+                    )}
+                </>
             )}
 
             {activeMainTab === 'register' && (
                 <div className="space-y-6">
                     {/* Register Sub-Nav (Visible on Mobile/Tablet if not using dropdown, but here we use state) */}
-                    <div className="flex md:hidden justify-center bg-white/5 p-1 rounded-xl gap-2 mb-4">
+                    <div className={`flex md:hidden justify-center p-1 rounded-xl gap-2 mb-4 ${theme === 'dark' ? 'bg-white/5' : 'bg-slate-200'}`}>
                         <button onClick={() => setActiveRegisterView('single')} className={`flex-1 py-2 text-xs font-bold rounded-lg ${activeRegisterView === 'single' ? 'bg-indigo-600 text-white' : 'text-slate-500'}`}>Single</button>
                         <button onClick={() => setActiveRegisterView('worksheet')} className={`flex-1 py-2 text-xs font-bold rounded-lg ${activeRegisterView === 'worksheet' ? 'bg-indigo-600 text-white' : 'text-slate-500'}`}>Form</button>
                         <button onClick={() => setActiveRegisterView('income')} className={`flex-1 py-2 text-xs font-bold rounded-lg ${activeRegisterView === 'income' ? 'bg-indigo-600 text-white' : 'text-slate-500'}`}>Income</button>
@@ -360,14 +397,19 @@ function App({ instanceId, onExit }: AppProps) {
 
                     {activeRegisterView === 'worksheet' && (
                         <MonthlyWorksheet 
+                          users={users}
                           entries={entries} budgets={budgets} categories={categories} savings={savings} trips={trips} monthId={currentMonth} currency={currency}
-                          onUpdateEntry={(cid, acc, amt, tid) => {
+                          onUpdateEntry={(cid, acc, amt, tid, desc) => {
                               setEntries(prev => {
                                   const singleSum = prev.filter(e => e.categoryId === cid && e.account === acc && e.monthId === currentMonth && e.entryType === 'single').reduce((s, e) => s + e.amount, 0);
                                   const needed = amt - singleSum;
                                   const idx = prev.findIndex(e => e.categoryId === cid && e.account === acc && e.monthId === currentMonth && e.entryType === 'worksheet');
-                                  if (idx >= 0) { const next = [...prev]; next[idx] = { ...next[idx], amount: needed, ...(tid ? { tripId: tid } : {}) }; return next; }
-                                  return [...prev, { id: Math.random().toString(36), monthId: currentMonth, categoryId: cid, account: acc, amount: needed, entryType: 'worksheet', tripId: tid }];
+                                  if (idx >= 0) { 
+                                      const next = [...prev]; 
+                                      next[idx] = { ...next[idx], amount: needed, ...(tid !== undefined ? { tripId: tid } : {}), ...(desc !== undefined ? { description: desc } : {}) }; 
+                                      return next; 
+                                  }
+                                  return [...prev, { id: Math.random().toString(36), monthId: currentMonth, categoryId: cid, account: acc, amount: needed, entryType: 'worksheet', tripId: tid, description: desc }];
                               });
                           }}
                           onAddCategory={(n, g, a) => setCategories(p => [...p, {id: n.toLowerCase().replace(/\s+/g, '_') + '_' + Math.random().toString(36).substr(2, 4), name: n, group: g as any, defaultAccount: a}])}
@@ -386,12 +428,12 @@ function App({ instanceId, onExit }: AppProps) {
             
             {activeMainTab === 'planning' && (
                 <div className="space-y-6">
-                    <div className="flex md:hidden justify-center bg-white/5 p-1 rounded-xl gap-2 mb-4">
+                    <div className={`flex md:hidden justify-center p-1 rounded-xl gap-2 mb-4 ${theme === 'dark' ? 'bg-white/5' : 'bg-slate-200'}`}>
                         <button onClick={() => setActivePlanningView('budget')} className={`flex-1 py-2 text-xs font-bold rounded-lg ${activePlanningView === 'budget' ? 'bg-indigo-600 text-white' : 'text-slate-500'}`}>Budgets</button>
                         <button onClick={() => setActivePlanningView('travel')} className={`flex-1 py-2 text-xs font-bold rounded-lg ${activePlanningView === 'travel' ? 'bg-indigo-600 text-white' : 'text-slate-500'}`}>Trips</button>
                     </div>
 
-                    {activePlanningView === 'travel' && <TravelDashboard trips={trips} entries={entries} currency={currency} onAddTrip={(t) => setTrips(p => [...p, { ...t, id: Math.random().toString(36) }])} onUpdateTrip={(updatedTrip) => setTrips(p => p.map(t => t.id === updatedTrip.id ? updatedTrip : t))} />}
+                    {activePlanningView === 'travel' && <TravelDashboard users={users} trips={trips} entries={entries} currency={currency} onAddTrip={(t) => setTrips(p => [...p, { ...t, id: Math.random().toString(36) }])} onUpdateTrip={(updatedTrip) => setTrips(p => p.map(t => t.id === updatedTrip.id ? updatedTrip : t))} />}
                     
                     {activePlanningView === 'budget' && <BudgetManager budgets={budgets} categories={categories} savings={savings} entries={entries} totalIncome={currentTotalIncome} users={users} currency={currency}
                       onAddBudget={(cid, lim, acc) => setBudgets(p => [...p, { categoryId: cid, limit: lim, account: acc }])}
@@ -438,6 +480,21 @@ function App({ instanceId, onExit }: AppProps) {
                 <span className="text-[10px] font-medium">Settings</span>
             </button>
         </div>
+
+        {showEasterEgg && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm animate-in fade-in duration-200" onClick={() => setShowEasterEgg(false)}>
+              <div className="bg-white p-8 rounded-3xl shadow-2xl transform transition-all scale-100 animate-in zoom-in-95 duration-200 text-center max-w-xs mx-4 border border-white/20" onClick={e => e.stopPropagation()}>
+                  <div className="w-20 h-20 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-3xl flex items-center justify-center text-white font-bold text-3xl mx-auto mb-6 shadow-xl shadow-indigo-500/30 rotate-3">FS</div>
+                  <h3 className="text-2xl font-bold text-slate-800 mb-2">FairShare</h3>
+                  <p className="text-slate-500 font-medium mb-1">Made with ❤️ by</p>
+                  <a href="https://github.com/trasousa" target="_blank" rel="noopener noreferrer" className="text-indigo-600 font-bold hover:underline mb-6 block">trasousa</a>
+                  <div className="inline-flex items-center gap-2 px-3 py-1 bg-slate-100 rounded-full text-xs font-mono text-slate-500 mb-8 border border-slate-200">
+                      <span>v1.0.0</span>
+                  </div>
+                  <button onClick={() => setShowEasterEgg(false)} className="w-full bg-slate-900 text-white py-3.5 rounded-2xl font-bold hover:bg-slate-800 transition active:scale-95">Awesome!</button>
+              </div>
+          </div>
+        )}
     </div>
   );
 }

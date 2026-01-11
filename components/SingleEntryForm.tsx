@@ -23,6 +23,7 @@ export const SingleEntryForm: React.FC<SingleEntryFormProps> = ({ categories, tr
 
   const selectedCategory = categories.find(c => c.id === categoryId);
   const isTravelCategory = selectedCategory?.group === 'TRAVEL';
+  const activeAvatar = account === 'SHARED' ? users.shared?.avatar : account === 'USER_1' ? users.user_1.avatar : users.user_2.avatar;
 
   // Symbol for display
   const symbol = currency === 'EUR' ? '€' : currency === 'GBP' ? '£' : currency === 'JPY' ? '¥' : currency === 'BRL' ? 'R$' : '$';
@@ -59,7 +60,7 @@ export const SingleEntryForm: React.FC<SingleEntryFormProps> = ({ categories, tr
   };
 
   return (
-    <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+    <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-4 sm:p-6">
        <h2 className="font-semibold text-slate-800 mb-6">Add Expense</h2>
        <form onSubmit={handleSubmit} className="space-y-4">
            
@@ -87,7 +88,7 @@ export const SingleEntryForm: React.FC<SingleEntryFormProps> = ({ categories, tr
                             type="date"
                             value={date}
                             onChange={e => setDate(e.target.value)}
-                            className="w-full pl-9 pr-3 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-100 outline-none text-slate-600"
+                            className="w-full min-w-0 pl-9 pr-3 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-100 outline-none text-slate-600 appearance-none [&::-webkit-calendar-picker-indicator]:hidden"
                        />
                    </div>
                </div>
@@ -116,22 +117,37 @@ export const SingleEntryForm: React.FC<SingleEntryFormProps> = ({ categories, tr
                        onChange={e => setCategoryId(e.target.value)}
                        className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-100 outline-none bg-white text-slate-600"
                    >
-                       {categories.map(c => (
-                           <option key={c.id} value={c.id}>{c.name}</option>
-                       ))}
+                       <optgroup label="Shared Expenses">
+                           {categories.filter(c => c.group !== 'SAVINGS' && c.defaultAccount === 'SHARED').map(c => (
+                               <option key={c.id} value={c.id}>{c.name}</option>
+                           ))}
+                       </optgroup>
+                       <optgroup label={`${users.user_1.name} Personal`}>
+                           {categories.filter(c => c.group !== 'SAVINGS' && c.defaultAccount === 'USER_1').map(c => (
+                               <option key={c.id} value={c.id}>{c.name}</option>
+                           ))}
+                       </optgroup>
+                       <optgroup label={`${users.user_2.name} Personal`}>
+                           {categories.filter(c => c.group !== 'SAVINGS' && c.defaultAccount === 'USER_2').map(c => (
+                               <option key={c.id} value={c.id}>{c.name}</option>
+                           ))}
+                       </optgroup>
                    </select>
                </div>
                <div>
                    <label className="block text-sm font-medium text-slate-500 mb-1">Account</label>
-                   <select 
-                       value={account} 
-                       onChange={e => setAccount(e.target.value as AccountType)}
-                       className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-100 outline-none bg-white text-slate-600"
-                   >
-                       <option value="SHARED">Shared Account</option>
-                       <option value="USER_1">{users.user_1.name}</option>
-                       <option value="USER_2">{users.user_2.name}</option>
-                   </select>
+                   <div className="flex items-center gap-2">
+                       {activeAvatar ? <img src={activeAvatar} className="w-10 h-10 rounded-full object-cover border border-slate-200 shadow-sm" alt="Account" /> : <div className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center text-slate-400 font-bold text-xs">{account === 'SHARED' ? 'S' : account === 'USER_1' ? '1' : '2'}</div>}
+                       <select 
+                           value={account} 
+                           onChange={e => setAccount(e.target.value as AccountType)}
+                           className="flex-1 px-3 py-2.5 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-100 outline-none bg-white text-slate-600"
+                       >
+                           <option value="SHARED">Shared Account</option>
+                           <option value="USER_1">{users.user_1.name}</option>
+                           <option value="USER_2">{users.user_2.name}</option>
+                       </select>
+                   </div>
                </div>
            </div>
 

@@ -1,23 +1,25 @@
 import React, { useState, useEffect } from 'react';
-import { Category, ExpenseEntry, AccountType, Budget, Trip, CurrencyCode, SavingsGoal } from '../types';
-import { AlertCircle, Plus, Edit2, Check, X, Plane, TrendingUp } from 'lucide-react';
+import { Category, ExpenseEntry, AccountType, Budget, Trip, CurrencyCode, SavingsGoal, User } from '../types';
+import { AlertCircle, Plus, Edit2, Check, X, Plane, TrendingUp, MessageSquare } from 'lucide-react';
 
 interface MonthlyWorksheetProps {
   entries: ExpenseEntry[];
   budgets: Budget[];
   categories: Category[];
   savings?: SavingsGoal[];
+  users: Record<string, User>;
   trips: Trip[];
   monthId: string;
   currency: CurrencyCode;
-  onUpdateEntry: (categoryId: string, account: AccountType, amount: number, tripId?: string) => void;
+  onUpdateEntry: (categoryId: string, account: AccountType, amount: number, tripId?: string, description?: string) => void;
   onAddCategory: (name: string, group: string, account: AccountType) => void;
   onEditCategory: (id: string, newName: string) => void;
   onDateClick: () => void;
 }
 
-const MoneyInput = ({ value, onChange, colorBase, currency, readOnly = false }: { value: number; onChange: (val: number) => void; colorBase: 'purple' | 'blue' | 'pink' | 'emerald'; currency: CurrencyCode; readOnly?: boolean; }) => {
+const MoneyInput = ({ value, onChange, onDescriptionChange, description, color, currency, readOnly = false }: { value: number; onChange: (val: number) => void; onDescriptionChange: (val: string) => void; description?: string; color: string; currency: CurrencyCode; readOnly?: boolean; }) => {
   const [localValue, setLocalValue] = useState(value === 0 ? '' : value.toString());
+  const [showDesc, setShowDesc] = useState(false);
 
   useEffect(() => {
     if (parseFloat(localValue || '0') !== value) {
@@ -34,13 +36,6 @@ const MoneyInput = ({ value, onChange, colorBase, currency, readOnly = false }: 
     }
   };
 
-  const colorClasses = {
-    purple: value > 0 ? 'bg-purple-50 border-purple-300 text-purple-800 font-bold' : 'bg-white border-slate-300 text-slate-700',
-    blue: value > 0 ? 'bg-blue-50 border-blue-300 text-blue-800 font-bold' : 'bg-white border-slate-300 text-slate-700',
-    pink: value > 0 ? 'bg-pink-50 border-pink-300 text-pink-800 font-bold' : 'bg-white border-slate-300 text-slate-700',
-    emerald: value > 0 ? 'bg-emerald-50 border-emerald-300 text-emerald-800 font-bold' : 'bg-white border-slate-300 text-slate-700',
-  };
-
   const symbol = currency === 'EUR' ? '€' : currency === 'GBP' ? '£' : currency === 'JPY' ? '¥' : currency === 'BRL' ? 'R$' : '$';
 
   return (
@@ -51,16 +46,54 @@ const MoneyInput = ({ value, onChange, colorBase, currency, readOnly = false }: 
             inputMode="decimal"
             placeholder="0"
             readOnly={readOnly}
-            className={`w-full pl-6 pr-2 py-1.5 text-sm border rounded-md outline-none focus:ring-2 transition text-right ${readOnly ? 'bg-slate-50 text-slate-400 cursor-not-allowed' : colorClasses[colorBase]} focus:ring-${colorBase}-200`}
+            className={`w-full pl-6 pr-8 py-1.5 text-sm border rounded-md outline-none focus:ring-2 transition text-right ${readOnly ? 'bg-slate-50 text-slate-400 cursor-not-allowed' : 'bg-white border-slate-300 text-slate-700'}`}
+            style={!readOnly && value > 0 ? { 
+                backgroundColor: `${color}10`, 
+                borderColor: `${color}50`, 
+                color: color, 
+                fontWeight: 'bold',
+                boxShadow: `0 0 0 1px ${color}20`
+            } : {}}
             value={localValue}
             onChange={handleChange}
             onBlur={() => setLocalValue(value === 0 ? '' : value.toString())}
         />
+        {!readOnly && (
+            <>
+                <button 
+                    onClick={() => setShowDesc(!showDesc)}
+                    className={`absolute right-1 top-1/2 -translate-y-1/2 p-1.5 rounded-md transition-all ${description ? 'bg-indigo-50 hover:bg-indigo-100' : 'text-slate-300 hover:text-slate-500 hover:bg-slate-100 opacity-0 group-hover/input:opacity-100'}`}
+                    style={{ color: description ? color : undefined }}
+                    title={description || "Add comment"}
+                >
+                    <MessageSquare size={14} fill={description ? "currentColor" : "none"} />
+                </button>
+                {showDesc && (
+                    <div className="absolute top-full right-0 z-50 mt-2 w-64 bg-white border border-slate-200 shadow-xl rounded-xl p-3 animate-in fade-in zoom-in-95 duration-200 ring-1 ring-slate-900/5">
+                        <textarea 
+                            value={description || ''} 
+                            onChange={e => onDescriptionChange(e.target.value)}
+                            className="w-full text-xs border border-slate-200 rounded-lg p-2.5 outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-200 h-24 resize-none text-slate-700 bg-slate-50 focus:bg-white transition-colors"
+                            placeholder="Add a note or description..."
+                            autoFocus
+                        />
+                        <div className="flex justify-end mt-2">
+                            <button 
+                                onClick={() => setShowDesc(false)} 
+                                className="text-xs bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-1.5 rounded-lg font-medium transition shadow-sm shadow-indigo-200"
+                            >
+                                Done
+                            </button>
+                        </div>
+                    </div>
+                )}
+            </>
+        )}
     </div>
   );
 };
 
-export const MonthlyWorksheet: React.FC<MonthlyWorksheetProps> = ({ entries, budgets, categories, savings = [], trips, monthId, currency, onUpdateEntry, onAddCategory, onEditCategory, onDateClick }) => {
+export const MonthlyWorksheet: React.FC<MonthlyWorksheetProps> = ({ entries, budgets, categories, savings = [], users, trips, monthId, currency, onUpdateEntry, onAddCategory, onEditCategory, onDateClick }) => {
   const [isAddingCat, setIsAddingCat] = useState(false);
   const [newCatName, setNewCatName] = useState('');
   const [newCatGroup, setNewCatGroup] = useState('VARIABLE');
@@ -70,6 +103,10 @@ export const MonthlyWorksheet: React.FC<MonthlyWorksheetProps> = ({ entries, bud
   const [editingName, setEditingName] = useState('');
 
   const getAmount = (catId: string, account: AccountType) => entries.filter(e => e.categoryId === catId && e.account === account && e.monthId === monthId).reduce((sum, e) => sum + e.amount, 0);
+  const getDescription = (catId: string, account: AccountType) => {
+      const entry = entries.find(e => e.categoryId === catId && e.account === account && e.monthId === monthId && e.entryType === 'worksheet');
+      return entry?.description || '';
+  };
   const getBudget = (catId: string) => budgets.find(b => b.categoryId === catId)?.limit || 0;
 
   const handleAddSubmit = (e: React.FormEvent) => {
@@ -123,8 +160,8 @@ export const MonthlyWorksheet: React.FC<MonthlyWorksheetProps> = ({ entries, bud
           <div className="col-span-5">Category</div>
           <div className="col-span-7 grid grid-cols-3 gap-2">
             <div>Shared</div>
-            <div>User 1</div>
-            <div>User 2</div>
+            <div>{users.user_1?.name}</div>
+            <div>{users.user_2?.name}</div>
           </div>
       </div>
 
@@ -165,9 +202,9 @@ export const MonthlyWorksheet: React.FC<MonthlyWorksheetProps> = ({ entries, bud
                 
                 <div className="md:col-span-7">
                     <div className="grid grid-cols-3 gap-2">
-                        <div>{showShared && <MoneyInput value={sharedVal} onChange={(val) => onUpdateEntry(cat.id, 'SHARED', val, activeTripId)} colorBase={isSavingsSection ? 'emerald' : 'purple'} currency={currency}/>}</div>
-                        <div>{showU1 && <MoneyInput value={u1Val} onChange={(val) => onUpdateEntry(cat.id, 'USER_1', val, activeTripId)} colorBase={isSavingsSection ? 'emerald' : 'blue'} currency={currency}/>}</div>
-                        <div>{showU2 && <MoneyInput value={u2Val} onChange={(val) => onUpdateEntry(cat.id, 'USER_2', val, activeTripId)} colorBase={isSavingsSection ? 'emerald' : 'pink'} currency={currency}/>}</div>
+                        <div>{showShared && <MoneyInput value={sharedVal} onChange={(val) => onUpdateEntry(cat.id, 'SHARED', val, activeTripId)} onDescriptionChange={(d) => onUpdateEntry(cat.id, 'SHARED', sharedVal, activeTripId, d)} description={getDescription(cat.id, 'SHARED')} color={users.shared?.color || '#a855f7'} currency={currency}/>}</div>
+                        <div>{showU1 && <MoneyInput value={u1Val} onChange={(val) => onUpdateEntry(cat.id, 'USER_1', val, activeTripId)} onDescriptionChange={(d) => onUpdateEntry(cat.id, 'USER_1', u1Val, activeTripId, d)} description={getDescription(cat.id, 'USER_1')} color={users.user_1.color} currency={currency}/>}</div>
+                        <div>{showU2 && <MoneyInput value={u2Val} onChange={(val) => onUpdateEntry(cat.id, 'USER_2', val, activeTripId)} onDescriptionChange={(d) => onUpdateEntry(cat.id, 'USER_2', u2Val, activeTripId, d)} description={getDescription(cat.id, 'USER_2')} color={users.user_2.color} currency={currency}/>}</div>
                     </div>
                 </div>
               </div>
@@ -183,9 +220,18 @@ export const MonthlyWorksheet: React.FC<MonthlyWorksheetProps> = ({ entries, bud
         <div className="bg-slate-50 border-b border-slate-200 px-4 py-3 flex flex-col md:flex-row justify-between items-center gap-4">
              <span className="text-xs font-medium text-slate-500 text-center md:text-left">Enter your expenses directly in the columns below.</span>
             <div className="flex gap-4 text-xs font-semibold uppercase tracking-wider text-slate-500">
-                <div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full bg-purple-500"></div>Shared</div>
-                <div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full bg-blue-500"></div>User 1</div>
-                <div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full bg-pink-500"></div>User 2</div>
+                <div className="flex items-center gap-2">
+                    {users.shared?.avatar ? <img src={users.shared.avatar} className="w-5 h-5 rounded-full object-cover border border-slate-200" alt="Shared" /> : <div className="w-3 h-3 rounded-full" style={{ backgroundColor: users.shared?.color }}></div>}
+                    Shared
+                </div>
+                <div className="flex items-center gap-2">
+                    {users.user_1?.avatar ? <img src={users.user_1.avatar} className="w-5 h-5 rounded-full object-cover border border-slate-200" alt={users.user_1.name} /> : <div className="w-3 h-3 rounded-full" style={{ backgroundColor: users.user_1.color }}></div>}
+                    {users.user_1?.name}
+                </div>
+                <div className="flex items-center gap-2">
+                    {users.user_2?.avatar ? <img src={users.user_2.avatar} className="w-5 h-5 rounded-full object-cover border border-slate-200" alt={users.user_2.name} /> : <div className="w-3 h-3 rounded-full" style={{ backgroundColor: users.user_2.color }}></div>}
+                    {users.user_2?.name}
+                </div>
             </div>
         </div>
         
