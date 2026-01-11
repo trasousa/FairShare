@@ -164,8 +164,11 @@ export const MonthlyDashboard: React.FC<MonthlyDashboardProps> = ({ entries, bud
     const links: any[] = [];
     
     // 1. Income -> Total Pot
-    if (incomeU1 > 0) links.push({ source: 0, target: 2, value: incomeU1 });
-    if (incomeU2 > 0) links.push({ source: 1, target: 2, value: incomeU2 });
+    const valIncomeU1 = isNaN(incomeU1) ? 0 : incomeU1;
+    const valIncomeU2 = isNaN(incomeU2) ? 0 : incomeU2;
+
+    if (valIncomeU1 > 0) links.push({ source: 0, target: 2, value: valIncomeU1 });
+    if (valIncomeU2 > 0) links.push({ source: 1, target: 2, value: valIncomeU2 });
 
     // 2. Total Pot -> Groups -> Categories
     let nodeIndex = 3;
@@ -180,7 +183,7 @@ export const MonthlyDashboard: React.FC<MonthlyDashboardProps> = ({ entries, bud
             return cat?.group === groupName;
         });
 
-        const groupTotal = groupEntries.reduce((sum, e) => sum + e.amount, 0);
+        const groupTotal = isNaN(groupEntries.reduce((sum, e) => sum + e.amount, 0)) ? 0 : groupEntries.reduce((sum, e) => sum + e.amount, 0);
         if (groupTotal <= 0) return;
 
         const groupNodeIdx = nodeIndex++;
@@ -214,7 +217,7 @@ export const MonthlyDashboard: React.FC<MonthlyDashboardProps> = ({ entries, bud
         });
     });
 
-    const unallocated = totalIncome - totalSpent;
+    const unallocated = isNaN(totalIncome - totalSpent) ? 0 : totalIncome - totalSpent;
     if (unallocated > 0.01) {
         nodes.push({ name: 'Unallocated', color: GREEN });
         links.push({
@@ -377,7 +380,7 @@ export const MonthlyDashboard: React.FC<MonthlyDashboardProps> = ({ entries, bud
                                 <span className="text-xs font-bold">{formatCurrency(item.val, currency)}</span>
                                 {item.pct !== null ? (
                                     <div className="flex items-center gap-1">
-                                        <span className="text-[9px] text-emerald-300 opacity-80">
+                                        <span className="text-[10px] text-emerald-300 opacity-80">
                                             Total: {Math.round(item.pct)}%
                                         </span>
                                         <AppTooltip content={`Total attributed wealth (Personal savings + ${Math.round(item.label === users.user_1.name ? user1Ratio*100 : (1-user1Ratio)*100)}% of shared savings)`}>
@@ -387,7 +390,7 @@ export const MonthlyDashboard: React.FC<MonthlyDashboardProps> = ({ entries, bud
                                 ) : item.breakdown ? (
                                     <div className="flex flex-col mt-0.5 border-t border-white/5 pt-0.5">
                                         {item.breakdown.map((b, bi) => (
-                                            <span key={bi} className="text-[8px] text-emerald-300/60 leading-tight">
+                                            <span key={bi} className="text-[9px] text-emerald-300/80 leading-tight">
                                                 {b.label.split(' ')[0]}: {formatCurrency(b.val, currency)}
                                             </span>
                                         ))}
@@ -695,51 +698,53 @@ export const MonthlyDashboard: React.FC<MonthlyDashboardProps> = ({ entries, bud
 
                                                                                                                                                                                                                                                 }}
 
-                                                                                                                                                                                                                                                link={(linkProps: any) => {
+                                                                                                                                                                                                                                                                                            link={(linkProps: any) => {
 
-                                                                                                                                                                                                                                                    const { source, target, value } = linkProps;
+                                                                                                                                                                                                                                                                                                const { source, target, value } = linkProps;
 
-                                                                                                                                                                                                    
+                                                                                                                                                                                                                                                
 
-                                                                                                                                                                                                                                                    if (!source || !target || !sankeyData.nodes[target.index]) {
+                                                                                                                                                                                                                                                                                                if (!source || !target || !sankeyData.nodes[target.index]) {
 
-                                                                                                                                                                                                                                                        return null; // Or render a placeholder if preferred
+                                                                                                                                                                                                                                                                                                    return null; // Or render a placeholder if preferred
 
-                                                                                                                                                                                                                                                    }
+                                                                                                                                                                                                                                                                                                }
 
-                                                                                                                                                                                                    
+                                                                                                                                                                                                                                                
 
-                                                                                                                                                                                                                                                    const targetNode = sankeyData.nodes[target.index];
+                                                                                                                                                                                                                                                                                                const targetNode = sankeyData.nodes[target.index];
 
-                                                                                                                                                                                                                                                    const linkColor = targetNode.color;
+                                                                                                                                                                                                                                                                                                const linkColor = targetNode.color;
 
-                                                                                                                                                                                                                                                    const strokeWidth = Math.max(1, value / totalIncome * 100);
+                                                                                                                                                                                                                                                                                                // Scale stroke width by value, with a minimum for visibility
 
-                                                                                                                                                                                                                                                    
+                                                                                                                                                                                                                                                                                                const strokeWidth = Math.max(1.5, Math.sqrt(value / totalIncome) * 20); 
 
-                                                                                                                                                                                                                                                    return (
+                                                                                                                                                                                                                                                                                                
 
-                                                                                                                                                                                                                                                        <g>
+                                                                                                                                                                                                                                                                                                return (
 
-                                                                                                                                                                                                                                                            <path
+                                                                                                                                                                                                                                                                                                    <g>
 
-                                                                                                                                                                                                                                                                d={linkProps.path}
+                                                                                                                                                                                                                                                                                                        <path
 
-                                                                                                                                                                                                                                                                stroke={linkColor}
+                                                                                                                                                                                                                                                                                                            d={linkProps.path}
 
-                                                                                                                                                                                                                                                                strokeWidth={strokeWidth}
+                                                                                                                                                                                                                                                                                                            stroke={linkColor}
 
-                                                                                                                                                                                                                                                                strokeOpacity={0.4}
+                                                                                                                                                                                                                                                                                                            strokeWidth={strokeWidth}
 
-                                                                                                                                                                                                                                                                fill="none"
+                                                                                                                                                                                                                                                                                                            strokeOpacity={0.6}
 
-                                                                                                                                                                                                                                                            />
+                                                                                                                                                                                                                                                                                                            fill="none"
 
-                                                                                                                                                                                                                                                        </g>
+                                                                                                                                                                                                                                                                                                        />
 
-                                                                                                                                                                                                                                                    );
+                                                                                                                                                                                                                                                                                                    </g>
 
-                                                                                                                                                                                                                                                }}
+                                                                                                                                                                                                                                                                                                );
+
+                                                                                                                                                                                                                                                                                            }}
 
                                                                                                                                                                                                                                                 nodePadding={20} 
 
