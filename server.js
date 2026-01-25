@@ -130,6 +130,33 @@ app.delete('/api/instance/:id', (req, res) => {
     });
 });
 
+app.patch('/api/instance/:id/rename', (req, res) => {
+    const id = req.params.id;
+    const { name } = req.body;
+    
+    if (!name) {
+        res.status(400).json({ error: "Missing new name" });
+        return;
+    }
+
+    db.run(
+        "UPDATE instances SET name = ?, lastAccessed = ? WHERE id = ?",
+        [name, Date.now(), id],
+        function(err) {
+            if (err) {
+                console.error("PATCH /instance/rename error:", err);
+                res.status(500).json({ error: err.message });
+                return;
+            }
+            if (this.changes === 0) {
+                res.status(404).json({ error: "Instance not found" });
+                return;
+            }
+            res.json({ message: "Renamed successfully" });
+        }
+    );
+});
+
 // --- 5. Catch-all for React Frontend ---
 app.get('*', (req, res) => {
     // If we are in dev mode (no dist folder), this might fail, but the proxy handles it.

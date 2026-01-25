@@ -8,10 +8,11 @@ interface SingleEntryFormProps {
   currentMonth: string;
   users: Record<string, User>;
   currency: CurrencyCode;
+  getInputClass: (isInput?: boolean) => string;
   onAddEntry: (entry: Omit<ExpenseEntry, 'id'>) => void;
 }
 
-export const SingleEntryForm: React.FC<SingleEntryFormProps> = ({ categories, trips, currentMonth, users, currency, onAddEntry }) => {
+export const SingleEntryForm: React.FC<SingleEntryFormProps> = ({ categories, trips, currentMonth, users, currency, getInputClass, onAddEntry }) => {
   const [amount, setAmount] = useState('');
   const [description, setDescription] = useState('');
   const [categoryId, setCategoryId] = useState(categories[0]?.id || '');
@@ -68,13 +69,14 @@ export const SingleEntryForm: React.FC<SingleEntryFormProps> = ({ categories, tr
                <div>
                    <label className="block text-sm font-medium text-slate-500 mb-1">Amount</label>
                    <div className="relative">
-                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 font-medium">{symbol}</span>
+                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 font-medium z-10 pointer-events-none">{symbol}</span>
                         <input 
                             type="number" 
                             step="0.01"
                             value={amount}
                             onChange={e => setAmount(e.target.value)}
-                            className="w-full pl-8 pr-3 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-100 outline-none font-bold text-slate-700"
+                            className={getInputClass()}
+                            style={{ paddingLeft: '2rem' }}
                             placeholder="0.00"
                             required
                         />
@@ -88,7 +90,7 @@ export const SingleEntryForm: React.FC<SingleEntryFormProps> = ({ categories, tr
                             type="date"
                             value={date}
                             onChange={e => setDate(e.target.value)}
-                            className="w-full min-w-0 pl-9 pr-3 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-100 outline-none text-slate-600 appearance-none [&::-webkit-calendar-picker-indicator]:hidden"
+                            className={getInputClass() + " appearance-none [&::-webkit-calendar-picker-indicator]:hidden"}
                        />
                    </div>
                </div>
@@ -96,18 +98,17 @@ export const SingleEntryForm: React.FC<SingleEntryFormProps> = ({ categories, tr
 
            <div>
                <label className="block text-sm font-medium text-slate-500 mb-1">Description</label>
-               <div className="relative">
-                   <FileText size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-                   <input 
-                        type="text"
-                        value={description}
-                        onChange={e => setDescription(e.target.value)}
-                        className="w-full pl-9 pr-3 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-100 outline-none text-slate-600"
-                        placeholder="e.g. Dinner at Mario's"
-                        required
-                   />
-               </div>
-           </div>
+                                  <div className="relative">
+                                      <FileText size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                                      <input 
+                                           type="text"
+                                           value={description}
+                                           onChange={e => setDescription(e.target.value)}
+                                           className={getInputClass()}
+                                           placeholder="e.g. Dinner at Mario's"
+                                           required
+                                      />
+                                  </div>           </div>
 
            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                <div>
@@ -115,7 +116,7 @@ export const SingleEntryForm: React.FC<SingleEntryFormProps> = ({ categories, tr
                    <select 
                        value={categoryId} 
                        onChange={e => setCategoryId(e.target.value)}
-                       className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-100 outline-none bg-white text-slate-600"
+                       className={getInputClass(false)}
                    >
                        <optgroup label="Shared Expenses">
                            {categories.filter(c => c.group !== 'SAVINGS' && c.defaultAccount === 'SHARED').map(c => (
@@ -141,7 +142,7 @@ export const SingleEntryForm: React.FC<SingleEntryFormProps> = ({ categories, tr
                        <select 
                            value={account} 
                            onChange={e => setAccount(e.target.value as AccountType)}
-                           className="flex-1 px-3 py-2.5 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-100 outline-none bg-white text-slate-600"
+                           className={getInputClass(false)}
                        >
                            <option value="SHARED">Shared Account</option>
                            <option value="USER_1">{users.user_1.name}</option>
@@ -162,7 +163,7 @@ export const SingleEntryForm: React.FC<SingleEntryFormProps> = ({ categories, tr
                            <select 
                                 value={selectedTripId}
                                 onChange={e => setSelectedTripId(e.target.value)}
-                                className="w-full text-sm border-slate-300 rounded-lg p-2"
+                                className={getInputClass(false)}
                                 required
                            >
                                <option value="">-- Choose Trip --</option>
@@ -177,7 +178,7 @@ export const SingleEntryForm: React.FC<SingleEntryFormProps> = ({ categories, tr
                            <select 
                                 value={tripCategory}
                                 onChange={e => setTripCategory(e.target.value as any)}
-                                className="w-full text-sm border-slate-300 rounded-lg p-2"
+                                className={getInputClass(false)}
                            >
                                <option value="FLIGHT">Flight/Transport</option>
                                <option value="ACCOMMODATION">Accommodation</option>

@@ -19,7 +19,7 @@ interface MonthlyDashboardProps {
 
 export const MonthlyDashboard: React.FC<MonthlyDashboardProps> = ({ entries, budgets, categories, savings, incomes, users, currency, currentMonth }) => {
   const [expandedCatId, setExpandedCatId] = useState<string | null>(null);
-  const [expandedGroupId, setExpandedGroupId] = useState<string | null>(null);
+  const [expandedGroupIds, setExpandedGroupIds] = useState<Record<string, boolean>>({});
   const [viewMode, setViewMode] = useState<'LIST' | 'FLOW'>('LIST');
   const [filterAccount, setFilterAccount] = useState<'ALL' | AccountType>('ALL');
 
@@ -29,7 +29,6 @@ export const MonthlyDashboard: React.FC<MonthlyDashboardProps> = ({ entries, bud
 
   const monthlyIncomes = incomes.filter(i => i.monthId === currentMonth);
   
-  // Safe access for user data inside logic
   const u1Income = users?.user_1?.monthlyIncome || 0;
   const u2Income = users?.user_2?.monthlyIncome || 0;
 
@@ -95,7 +94,6 @@ export const MonthlyDashboard: React.FC<MonthlyDashboardProps> = ({ entries, bud
   }, [budgets, categories]);
 
   const sharedBudgetNeed = budgetTotals.SHARED; 
-  // Base the FairShare on the actual spent or the budget, whichever is higher (or actual spent if budget is 0)
   const fairShareBase = Math.max(totals.SHARED, sharedBudgetNeed);
   
   const user1Contribution = fairShareBase * user1Ratio;
@@ -149,11 +147,9 @@ export const MonthlyDashboard: React.FC<MonthlyDashboardProps> = ({ entries, bud
   }, [categories, monthlyEntries, filterAccount, budgets]);
 
   const sankeyData = useMemo(() => {
-    // Colors
     const GREEN = '#10b981';
     const RED = '#ef4444';
     const INDIGO = '#6366f1';
-    const SLATE = '#94a3b8';
 
     const nodes: any[] = [
       { name: users.user_1.name, color: GREEN }, // 0
@@ -163,18 +159,15 @@ export const MonthlyDashboard: React.FC<MonthlyDashboardProps> = ({ entries, bud
     
     const links: any[] = [];
     
-    // 1. Income -> Total Pot
     const valIncomeU1 = isNaN(incomeU1) ? 0 : incomeU1;
     const valIncomeU2 = isNaN(incomeU2) ? 0 : incomeU2;
 
     if (valIncomeU1 > 0) links.push({ source: 0, target: 2, value: valIncomeU1 });
     if (valIncomeU2 > 0) links.push({ source: 1, target: 2, value: valIncomeU2 });
 
-    // 2. Total Pot -> Groups -> Categories
     let nodeIndex = 3;
     const totalSpent = monthlyEntries.reduce((sum, e) => sum + e.amount, 0);
 
-    // Group the categories by their type
     const groups = ['FIXED', 'VARIABLE', 'LIFESTYLE', 'SAVINGS', 'TRAVEL'];
     
     groups.forEach(groupName => {
@@ -198,7 +191,6 @@ export const MonthlyDashboard: React.FC<MonthlyDashboardProps> = ({ entries, bud
             value: groupTotal
         });
 
-        // Categories within this group
         const catMap = new Map<string, number>();
         groupEntries.forEach(e => {
             const cat = categories.find(c => c.id === e.categoryId);
@@ -227,21 +219,22 @@ export const MonthlyDashboard: React.FC<MonthlyDashboardProps> = ({ entries, bud
         });
     }
 
-    // SANITY CHECK: Ensure all links have numeric values > 0
     const validLinks = links.filter(l => typeof l.value === 'number' && l.value > 0);
 
     return { nodes, links: validLinks };
-  }, [categories, monthlyEntries, incomeU1, incomeU2, totalIncome, users, currency]);
+  }, [categories, monthlyEntries, incomeU1, incomeU2, totalIncome, users]);
 
   const toggleGroup = (groupId: string) => {
-      setExpandedGroupId(prev => prev === groupId ? null : groupId);
+      setExpandedGroupIds(prev => ({
+          ...prev,
+          [groupId]: !prev[groupId]
+      }));
   };
 
   const toggleCat = (id: string) => {
       setExpandedCatId(prev => prev === id ? null : id);
   };
 
-  // SAFEGUARD: Only return UI if users are loaded
   if (!users || !users.user_1 || !users.user_2) {
       return <div className="p-8 text-center text-slate-400">Loading user data...</div>;
   }
@@ -249,8 +242,29 @@ export const MonthlyDashboard: React.FC<MonthlyDashboardProps> = ({ entries, bud
     return (
     <div className="space-y-8">
         
+        {/* Mobile-Only Summary View */}
+        <div className="md:hidden grid grid-cols-2 gap-3 mb-2">
+            <div className="bg-indigo-600 rounded-2xl p-4 text-white shadow-lg">
+                <span className="text-[10px] uppercase tracking-wider opacity-80 block mb-1">Total Spent</span>
+                <span className="text-xl font-bold">{formatCurrency(totals.SHARED + totals.USER_1 + totals.USER_2, currency)}</span>
+            </div>
+            <div className="bg-emerald-600 rounded-2xl p-4 text-white shadow-lg">
+                <span className="text-[10px] uppercase tracking-wider opacity-80 block mb-1">Savings</span>
+                <span className="text-xl font-bold">{formatCurrency(monthlySavingsTotal, currency)}</span>
+            </div>
+            <div className="bg-slate-800 rounded-2xl p-4 text-white shadow-lg col-span-2 flex justify-between items-center">
+                <div>
+                    <span className="text-[10px] uppercase tracking-wider opacity-80 block mb-1">Shared Pot Status</span>
+                    <span className="text-sm font-bold">{formatCurrency(totals.SHARED, currency)} / {formatCurrency(sharedBudgetNeed, currency)}</span>
+                </div>
+                <div className="w-12 h-12 rounded-full border-4 border-white/20 flex items-center justify-center">
+                    <span className="text-[10px] font-bold">{sharedBudgetNeed > 0 ? Math.round((totals.SHARED / sharedBudgetNeed) * 100) : 0}%</span>
+                </div>
+            </div>
+        </div>
+
         {/* 1. Account Breakdown */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 h-auto">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 h-auto">
             <div className="col-span-1">
                 <AccountSummary 
                     type="SHARED" 
@@ -283,7 +297,7 @@ export const MonthlyDashboard: React.FC<MonthlyDashboardProps> = ({ entries, bud
                     currency={currency}
                 />
             </div>
-            <div className="col-span-1">
+            <div className="col-span-1 sm:col-span-2 lg:col-span-1">
                 <AccountSummary 
                     type="USER_2" 
                     title={users.user_2.name} 
@@ -472,414 +486,185 @@ export const MonthlyDashboard: React.FC<MonthlyDashboardProps> = ({ entries, bud
                 </div>
             </div>
 
-                        {viewMode === 'LIST' ? (
+            {viewMode === 'LIST' ? (
+                <div className="overflow-x-auto">
+                    <table className="w-full text-sm text-left">
+                        <thead className="bg-slate-50/50 text-slate-500 font-medium">
+                            <tr>
+                                <th className="px-6 py-3">Category Group</th>
+                                <th className="px-6 py-3 text-right">{users.user_1.name}</th>
+                                <th className="px-6 py-3 text-right">{users.user_2.name}</th>
+                                <th className="px-6 py-3 text-right">Shared</th>
+                                <th className="px-6 py-3 text-right font-bold">Total</th>
+                                <th className="px-6 py-3 text-right">Budget</th>
+                                <th className="px-6 py-3 text-right">Status</th>
+                            </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100">
+                            {groupedBreakdown.map((group) => {
+                                const isGroupExpanded = expandedGroupIds[group.name];
+                                const groupOver = group.totalBudget > 0 && group.totalSpent > group.totalBudget;
 
-                            <div className="overflow-x-auto">
-
-                                <table className="w-full text-sm text-left">
-
-                                    {/* ... existing table code ... */}
-
-                                    <thead className="bg-slate-50/50 text-slate-500 font-medium">
-
-                                        <tr>
-
-                                            <th className="px-6 py-3">Category Group</th>
-
-                                            <th className="px-6 py-3 text-right">{users.user_1.name}</th>
-
-                                            <th className="px-6 py-3 text-right">{users.user_2.name}</th>
-
-                                            <th className="px-6 py-3 text-right">Shared</th>
-
-                                            <th className="px-6 py-3 text-right font-bold">Total</th>
-
-                                            <th className="px-6 py-3 text-right">Budget</th>
-
-                                            <th className="px-6 py-3 text-right">Status</th>
-
+                                return (
+                                    <React.Fragment key={group.name}>
+                                        <tr onClick={() => toggleGroup(group.name)} className={`cursor-pointer transition bg-slate-50/30 ${isGroupExpanded ? 'bg-indigo-50/30' : 'hover:bg-slate-50'}`}>
+                                            <td className="px-6 py-4 font-bold text-slate-800 flex items-center gap-2">
+                                                {isGroupExpanded ? <ChevronDown size={16} className="text-indigo-500" /> : <ChevronRight size={16} className="text-slate-400" />}
+                                                {group.name}
+                                                <span className="ml-2 px-1.5 py-0.5 bg-slate-200 text-slate-500 rounded text-[9px] font-bold">{group.items.length}</span>
+                                            </td>
+                                            <td className="px-6 py-4 text-right text-slate-600 font-medium">{formatCurrency(group.spentByUser1, currency)}</td>
+                                            <td className="px-6 py-4 text-right text-slate-600 font-medium">{formatCurrency(group.spentByUser2, currency)}</td>
+                                            <td className="px-6 py-4 text-right text-slate-600 font-medium">{formatCurrency(group.spentShared, currency)}</td>
+                                            <td className={`px-6 py-4 text-right font-bold ${group.name === 'SAVINGS' ? 'text-emerald-600' : 'text-slate-900'}`}>{formatCurrency(group.totalSpent, currency)}</td>
+                                            <td className="px-6 py-4 text-right text-slate-400">{group.totalBudget > 0 ? formatCurrency(group.totalBudget, currency) : '-'}</td>
+                                            <td className="px-6 py-4 text-right">
+                                                {group.totalBudget > 0 ? (
+                                                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${groupOver ? 'bg-red-100 text-red-600' : 'bg-emerald-100 text-emerald-600'}`}>
+                                                        {Math.round((group.totalSpent / group.totalBudget) * 100)}%
+                                                    </span>
+                                                ) : <span className="text-slate-300">-</span>}
+                                            </td>
                                         </tr>
-
-                                    </thead>
-
-                                    <tbody className="divide-y divide-slate-100">
-
-                                        {groupedBreakdown.map((group) => {
-
-                                            const isGroupExpanded = expandedGroupId === group.name;
-
-                                            const groupOver = group.totalBudget > 0 && group.totalSpent > group.totalBudget;
-
-            
-
+                                        {isGroupExpanded && group.items.map((item: any) => {
+                                            const isCatExpanded = expandedCatId === item.cat.id;
+                                            const isOver = item.budget > 0 && item.totalSpent > item.budget;
+                                            
                                             return (
-
-                                                <React.Fragment key={group.name}>
-
-                                                    <tr onClick={() => toggleGroup(group.name)} className={`cursor-pointer transition bg-slate-50/30 ${isGroupExpanded ? 'bg-indigo-50/30' : 'hover:bg-slate-50'}`}>
-
-                                                        <td className="px-6 py-4 font-bold text-slate-800 flex items-center gap-2">
-
-                                                            {isGroupExpanded ? <ChevronDown size={16} className="text-indigo-500" /> : <ChevronRight size={16} className="text-slate-400" />}
-
-                                                            {group.name}
-
-                                                            <span className="ml-2 px-1.5 py-0.5 bg-slate-200 text-slate-500 rounded text-[9px] font-bold">{group.items.length}</span>
-
+                                                <React.Fragment key={item.cat.id}>
+                                                    <tr onClick={(e) => { e.stopPropagation(); toggleCat(item.cat.id); }} className={`cursor-pointer transition border-l-4 ${isCatExpanded ? 'bg-white border-indigo-400' : 'hover:bg-slate-50/50 border-transparent'}`}>
+                                                        <td className="px-10 py-3 font-medium text-slate-600 flex items-center gap-2">
+                                                            <div className="w-1.5 h-1.5 rounded-full bg-slate-300"></div>
+                                                            {item.cat.name}
                                                         </td>
-
-                                                        <td className="px-6 py-4 text-right text-slate-600 font-medium">{formatCurrency(group.spentByUser1, currency)}</td>
-
-                                                        <td className="px-6 py-4 text-right text-slate-600 font-medium">{formatCurrency(group.spentByUser2, currency)}</td>
-
-                                                        <td className="px-6 py-4 text-right text-slate-600 font-medium">{formatCurrency(group.spentShared, currency)}</td>
-
-                                                        <td className={`px-6 py-4 text-right font-bold ${group.name === 'SAVINGS' ? 'text-emerald-600' : 'text-slate-900'}`}>{formatCurrency(group.totalSpent, currency)}</td>
-
-                                                        <td className="px-6 py-4 text-right text-slate-400">{group.totalBudget > 0 ? formatCurrency(group.totalBudget, currency) : '-'}</td>
-
-                                                        <td className="px-6 py-4 text-right">
-
-                                                            {group.totalBudget > 0 ? (
-
-                                                                <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${groupOver ? 'bg-red-100 text-red-600' : 'bg-emerald-100 text-emerald-600'}`}>
-
-                                                                    {Math.round((group.totalSpent / group.totalBudget) * 100)}%
-
-                                                                </span>
-
-                                                            ) : <span className="text-slate-300">-</span>}
-
+                                                        <td className="px-6 py-3 text-right text-slate-500 text-xs">{formatCurrency(item.spentByUser1, currency)}</td>
+                                                        <td className="px-6 py-3 text-right text-slate-500 text-xs">{formatCurrency(item.spentByUser2, currency)}</td>
+                                                        <td className="px-6 py-3 text-right text-slate-500 text-xs">{formatCurrency(item.spentShared, currency)}</td>
+                                                        <td className="px-6 py-3 text-right font-semibold text-slate-700">{formatCurrency(item.totalSpent, currency)}</td>
+                                                        <td className="px-6 py-3 text-right text-slate-400 text-xs">{item.budget > 0 ? formatCurrency(item.budget, currency) : '-'}</td>
+                                                        <td className="px-6 py-3 text-right">
+                                                            {item.budget > 0 && (
+                                                                <div className="w-16 h-1.5 bg-slate-100 rounded-full ml-auto overflow-hidden">
+                                                                    <div className={`h-full ${isOver ? 'bg-red-400' : 'bg-indigo-400'}`} style={{ width: `${Math.min((item.totalSpent / item.budget) * 100, 100)}%` }}></div>
+                                                                </div>
+                                                            )}
                                                         </td>
-
                                                     </tr>
-
-                                                    {isGroupExpanded && group.items.map((item: any) => {
-
-                                                        const isCatExpanded = expandedCatId === item.cat.id;
-
-                                                        const isOver = item.budget > 0 && item.totalSpent > item.budget;
-
-                                                        
-
-                                                        return (
-
-                                                            <React.Fragment key={item.cat.id}>
-
-                                                                <tr onClick={(e) => { e.stopPropagation(); toggleCat(item.cat.id); }} className={`cursor-pointer transition border-l-4 ${isCatExpanded ? 'bg-white border-indigo-400' : 'hover:bg-slate-50/50 border-transparent'}`}>
-
-                                                                    <td className="px-10 py-3 font-medium text-slate-600 flex items-center gap-2">
-
-                                                                        <div className="w-1.5 h-1.5 rounded-full bg-slate-300"></div>
-
-                                                                        {item.cat.name}
-
-                                                                    </td>
-
-                                                                    <td className="px-6 py-3 text-right text-slate-500 text-xs">{formatCurrency(item.spentByUser1, currency)}</td>
-
-                                                                    <td className="px-6 py-3 text-right text-slate-500 text-xs">{formatCurrency(item.spentByUser2, currency)}</td>
-
-                                                                    <td className="px-6 py-3 text-right text-slate-500 text-xs">{formatCurrency(item.spentShared, currency)}</td>
-
-                                                                    <td className="px-6 py-3 text-right font-semibold text-slate-700">{formatCurrency(item.totalSpent, currency)}</td>
-
-                                                                    <td className="px-6 py-3 text-right text-slate-400 text-xs">{item.budget > 0 ? formatCurrency(item.budget, currency) : '-'}</td>
-
-                                                                    <td className="px-6 py-3 text-right">
-
-                                                                        {item.budget > 0 && (
-
-                                                                            <div className="w-16 h-1.5 bg-slate-100 rounded-full ml-auto overflow-hidden">
-
-                                                                                <div className={`h-full ${isOver ? 'bg-red-400' : 'bg-indigo-400'}`} style={{ width: `${Math.min((item.totalSpent / item.budget) * 100, 100)}%` }}></div>
-
-                                                                            </div>
-
-                                                                        )}
-
-                                                                    </td>
-
-                                                                </tr>
-
-                                                                {isCatExpanded && (
-
-                                                                    <tr>
-
-                                                                        <td colSpan={7} className="bg-slate-50/80 p-0">
-
-                                                                            <div className="px-14 py-4 space-y-2 border-b border-slate-100">
-
-                                                                                {monthlyEntries.filter(e => e.categoryId === item.cat.id).sort((a,b) => (b.date||'').localeCompare(a.date||'')).map(entry => (
-
-                                                                                    <div key={entry.id} className="flex justify-between items-center text-[11px] text-slate-600 pl-4 border-l-2 border-slate-200">
-
-                                                                                        <div className="flex items-center gap-3">
-
-                                                                                            <span className="text-slate-400 font-mono w-16">{entry.date?.split('-').slice(1).join('/') || entry.monthId}</span>
-
-                                                                                            <div className="flex items-center gap-1.5">
-
-                                                                                                <img src={entry.account === 'SHARED' ? users.shared?.avatar : entry.account === 'USER_1' ? users.user_1?.avatar : users.user_2?.avatar} className="w-3.5 h-3.5 rounded-full" />
-
-                                                                                                <span className="font-medium text-slate-500">{entry.account === 'SHARED' ? 'Shared' : entry.account === 'USER_1' ? users.user_1.name : users.user_2.name}</span>
-
-                                                                                            </div>
-
-                                                                                            {entry.description && (
-
-                                                                                                <AppTooltip content={entry.description}>
-
-                                                                                                    <div className="flex items-center gap-1 cursor-help">
-
-                                                                                                        <MessageSquare size={10} className="text-slate-300" />
-
-                                                                                                        <span className="text-slate-400 italic truncate max-w-[200px]">- {entry.description}</span>
-
-                                                                                                    </div>
-
-                                                                                                </AppTooltip>
-
-                                                                                            )}
-
+                                                    {isCatExpanded && (
+                                                        <tr>
+                                                            <td colSpan={7} className="bg-slate-50/80 p-0">
+                                                                <div className="px-14 py-4 space-y-2 border-b border-slate-100">
+                                                                    {monthlyEntries.filter(e => e.categoryId === item.cat.id).sort((a,b) => (b.date||'').localeCompare(a.date||'')).map(entry => (
+                                                                        <div key={entry.id} className="flex justify-between items-center text-[11px] text-slate-600 pl-4 border-l-2 border-slate-200">
+                                                                            <div className="flex items-center gap-3">
+                                                                                <span className="text-slate-400 font-mono w-16">{entry.date?.split('-').slice(1).join('/') || entry.monthId}</span>
+                                                                                <div className="flex items-center gap-1.5">
+                                                                                    <img src={entry.account === 'SHARED' ? users.shared?.avatar : entry.account === 'USER_1' ? users.user_1?.avatar : users.user_2?.avatar} className="w-3.5 h-3.5 rounded-full" />
+                                                                                    <span className="font-medium text-slate-500">{entry.account === 'SHARED' ? 'Shared' : entry.account === 'USER_1' ? users.user_1.name : entry.account === 'USER_2' ? users.user_2.name : 'Unknown'}</span>
+                                                                                </div>
+                                                                                {entry.description && (
+                                                                                    <AppTooltip content={entry.description}>
+                                                                                        <div className="flex items-center gap-1 cursor-help">
+                                                                                            <MessageSquare size={10} className="text-slate-300" />
+                                                                                            <span className="text-slate-400 italic truncate max-w-[200px]">- {entry.description}</span>
                                                                                         </div>
-
-                                                                                        <span className="font-bold text-slate-700">{formatCurrency(entry.amount, currency)}</span>
-
-                                                                                    </div>
-
-                                                                                ))}
-
+                                                                                    </AppTooltip>
+                                                                                )}
                                                                             </div>
-
-                                                                        </td>
-
-                                                                    </tr>
-
-                                                                )}
-
-                                                            </React.Fragment>
-
-                                                        );
-
-                                                    })}
-
+                                                                            <span className="font-bold text-slate-700">{formatCurrency(entry.amount, currency)}</span>
+                                                                        </div>
+                                                                    ))}
+                                                                </div>
+                                                            </td>
+                                                        </tr>
+                                                    )}
                                                 </React.Fragment>
-
                                             );
-
                                         })}
-
-                                    </tbody>
-
-                                </table>
-
-                            </div>
-
-                        ) : (
-
-                            <div className="p-4 sm:p-8">
-
-                                                                                                <div className="h-[600px] w-full bg-slate-50/50 rounded-3xl p-6 border border-slate-100">
-
-                                                                                                    <ResponsiveContainer width="100%" height="100%">
-
-                                                                                                        <Sankey
-
-                                                                                                            key={JSON.stringify(sankeyData)} // Force re-render on data change
-
-                                                                                                                                                                                                                                                data={sankeyData}
-
-                                                                                                                                                                                                                                                node={{
-
-                                                                                                                                                                                                                                                    stroke: '#fff',
-
-                                                                                                                                                                                                                                                    strokeWidth: 2,
-
-                                                                                                                                                                                                                                                }}
-
-                                                                                                                                                                                                                                                                                            link={(linkProps: any) => {
-
-                                                                                                                                                                                                                                                                                                const { source, target, value } = linkProps;
-
-                                                                                                                                                                                                                                                
-
-                                                                                                                                                                                                                                                                                                if (!source || !target || !sankeyData.nodes[target.index]) {
-
-                                                                                                                                                                                                                                                                                                    return null; // Or render a placeholder if preferred
-
-                                                                                                                                                                                                                                                                                                }
-
-                                                                                                                                                                                                                                                
-
-                                                                                                                                                                                                                                                                                                const targetNode = sankeyData.nodes[target.index];
-
-                                                                                                                                                                                                                                                                                                const linkColor = targetNode.color;
-
-                                                                                                                                                                                                                                                                                                // Scale stroke width by value, with a minimum for visibility
-
-                                                                                                                                                                                                                                                                                                const strokeWidth = Math.max(1.5, Math.sqrt(value / totalIncome) * 20); 
-
-                                                                                                                                                                                                                                                                                                
-
-                                                                                                                                                                                                                                                                                                return (
-
-                                                                                                                                                                                                                                                                                                    <g>
-
-                                                                                                                                                                                                                                                                                                        <path
-
-                                                                                                                                                                                                                                                                                                            d={linkProps.path}
-
-                                                                                                                                                                                                                                                                                                            stroke={linkColor}
-
-                                                                                                                                                                                                                                                                                                            strokeWidth={strokeWidth}
-
-                                                                                                                                                                                                                                                                                                            strokeOpacity={0.6}
-
-                                                                                                                                                                                                                                                                                                            fill="none"
-
-                                                                                                                                                                                                                                                                                                        />
-
-                                                                                                                                                                                                                                                                                                    </g>
-
-                                                                                                                                                                                                                                                                                                );
-
-                                                                                                                                                                                                                                                                                            }}
-
-                                                                                                                                                                                                                                                nodePadding={20} 
-
-                                                                                                                                                                                                                                                margin={{ top: 20, bottom: 20, left: 10, right: 10 }}
-
-                                                                                                                                                                                                                                            >
-
-                                                                                                            <RechartsTooltip 
-
-                                                                                                                content={({ active, payload }: any) => {
-
-                                                                                                                    if (active && payload && payload.length) {
-
-                                                                                                                        const data = payload[0].payload;
-
-                                                                                                                        const isNode = data.source === undefined;
-
-                                                                                                                        return (
-
-                                                                                                                            <div className="bg-slate-900 text-white p-3 rounded-xl shadow-xl border border-white/10 text-xs">
-
-                                                                                                                                <p className="font-bold mb-1">{isNode ? data.name : `${data.source.name} → ${data.target.name}`}</p>
-
-                                                                                                                                <p className="text-indigo-300 font-mono">{formatCurrency(data.value, currency)}</p>
-
-                                                                                                                                {isNode && totalIncome > 0 && data.name !== 'Total Pot' && <p className="text-[10px] opacity-60 mt-1">{((data.value / totalIncome) * 100).toFixed(1)}% of total</p>}
-
-                                                                                                                            </div>
-
-                                                                                                                        );
-
-                                                                                                                    }
-
-                                                                                                                    return null;
-
-                                                                                                                }}
-
-                                                                                                            />
-
-                                                                                                            <Layer>
-
-                                                                                                                {sankeyData.nodes.map((node, i) => {
-
-                                                                                                                    const { x, y, dx, dy, name, color } = node;
-
-                                                                                                                    const isRight = x > 500; 
-
-                                                                                                                    return (
-
-                                                                                                                        <g key={`node-${i}`}>
-
-                                                                                                                            <Rectangle
-
-                                                                                                                                x={x}
-
-                                                                                                                                y={y}
-
-                                                                                                                                width={dx}
-
-                                                                                                                                height={dy}
-
-                                                                                                                                fill={color}
-
-                                                                                                                                radius={[4, 4, 4, 4]}
-
-                                                                                                                            />
-
-                                                                                                                            <text
-
-                                                                                                                                x={isRight ? x - 10 : x + dx + 10}
-
-                                                                                                                                y={y + dy / 2}
-
-                                                                                                                                textAnchor={isRight ? 'end' : 'start'}
-
-                                                                                                                                fontSize="11"
-
-                                                                                                                                fontWeight="bold"
-
-                                                                                                                                fill="#475569"
-
-                                                                                                                                dominantBaseline="central"
-
-                                                                                                                            >
-
-                                                                                                                                {name}
-
-                                                                                                                            </text>
-
-                                                                                                                        </g>
-
-                                                                                                                    );
-
-                                                                                                                })}
-
-                                                                                                            </Layer>
-
-                                                                                                        </Sankey>
-
-                                                                                                    </ResponsiveContainer>
-
-                                                                                                </div>
-
-                                                    <div className="mt-6 flex flex-wrap justify-center gap-6">
-
-                                                        <div className="flex items-center gap-2">
-
-                                                             <div className="w-3 h-3 rounded-full bg-[#10b981]"></div>
-
-                                                             <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Income & Savings</span>
-
-                                                        </div>
-
-                                                        <div className="flex items-center gap-2">
-
-                                                             <div className="w-3 h-3 rounded-full bg-[#ef4444]"></div>
-
-                                                             <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Expenses</span>
-
-                                                        </div>
-
-                                                        <div className="flex items-center gap-2">
-
-                                                             <div className="w-3 h-3 rounded-full bg-indigo-600"></div>
-
-                                                             <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Total Pot</span>
-
-                                                        </div>
-
-                                                    </div>
-
-                            </div>
-
-                        )}
+                                    </React.Fragment>
+                                );
+                            })}
+                        </tbody>
+                    </table>
+                </div>
+            ) : (
+                <div className="p-4 sm:p-8">
+                    <div className="h-[600px] w-full bg-slate-50/50 rounded-3xl p-6 border border-slate-100">
+                        <ResponsiveContainer width="100%" height="100%">
+                            <Sankey
+                                data={sankeyData}
+                                node={{ stroke: '#fff', strokeWidth: 2 }}
+                                link={(linkProps: any) => {
+                                    const { source, target, value } = linkProps;
+                                    if (!source || !target || !sankeyData.nodes[target.index]) return null;
+                                    const targetNode = sankeyData.nodes[target.index];
+                                    const linkColor = targetNode.color;
+                                    const strokeWidth = Math.max(1.5, Math.sqrt(value / totalIncome) * 20); 
+                                    return (
+                                        <g><path d={linkProps.path} stroke={linkColor} strokeWidth={strokeWidth} strokeOpacity={0.6} fill="none" /></g>
+                                    );
+                                }}
+                                nodePadding={20} 
+                                margin={{ top: 20, bottom: 20, left: 10, right: 10 }}
+                            >
+                                <RechartsTooltip 
+                                    content={({ active, payload }: any) => {
+                                        if (active && payload && payload.length) {
+                                            const data = payload[0].payload;
+                                            const isNode = data.source === undefined;
+                                            return (
+                                                <div className="bg-slate-900 text-white p-3 rounded-xl shadow-xl border border-white/10 text-xs">
+                                                    <p className="font-bold mb-1">{isNode ? data.name : `${data.source.name} → ${data.target.name}`}</p>
+                                                    <p className="text-indigo-300 font-mono">{formatCurrency(data.value, currency)}</p>
+                                                    {isNode && totalIncome > 0 && data.name !== 'Total Pot' && <p className="text-[10px] opacity-60 mt-1">{((data.value / totalIncome) * 100).toFixed(1)}% of total</p>}
+                                                </div>
+                                            );
+                                        }
+                                        return null;
+                                    }}
+                                />
+                                <Layer>
+                                    {sankeyData.nodes.map((node, i) => {
+                                        const { x, y, dx, dy, name, color } = node;
+                                        const isRight = x > 500; 
+                                        return (
+                                            <g key={`node-${i}`}>
+                                                <Rectangle x={x} y={y} width={dx} height={dy} fill={color} radius={[4, 4, 4, 4]} />
+                                                <text
+                                                    x={isRight ? x - 10 : x + dx + 10}
+                                                    y={y + dy / 2}
+                                                    textAnchor={isRight ? 'end' : 'start'}
+                                                    fontSize="11"
+                                                    fontWeight="bold"
+                                                    fill="#475569"
+                                                    dominantBaseline="central"
+                                                >
+                                                    {name}
+                                                </text>
+                                            </g>
+                                        );
+                                    })}
+                                </Layer>
+                            </Sankey>
+                        </ResponsiveContainer>
+                    </div>
+                    <div className="mt-6 flex flex-wrap justify-center gap-6">
+                        <div className="flex items-center gap-2">
+                            <div className="w-3 h-3 rounded-full bg-[#10b981]"></div>
+                            <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Income & Savings</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                            <div className="w-3 h-3 rounded-full bg-[#ef4444]"></div>
+                            <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Expenses</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                            <div className="w-3 h-3 rounded-full bg-[#6366f1]"></div>
+                            <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Total Pot</span>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     </div>
-  );
+    );
 };

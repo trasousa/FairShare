@@ -154,7 +154,7 @@ function App({ instanceId, onExit }: AppProps) {
       const timeoutId = setTimeout(saveData, 1000); 
       return () => clearTimeout(timeoutId);
 
-  }, [entries, incomes, categories, budgets, savings, trips, users, currency, instanceName, theme, loading]);
+  }, [entries, incomes, categories, budgets, savings, trips, users, currency, theme, loading, instanceName]);
 
   const changeMonth = (direction: -1 | 1) => {
       const [year, month] = currentMonth.split('-').map(Number);
@@ -229,6 +229,13 @@ function App({ instanceId, onExit }: AppProps) {
   const navBarClass = theme === 'dark' ? 'bg-slate-900 border-slate-800 text-slate-300' : 'bg-white border-slate-200 text-slate-600';
   const navItemClass = (isActive: boolean) => `flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${isActive ? (theme === 'dark' ? 'bg-slate-800 text-white' : 'bg-indigo-50 text-indigo-700') : 'hover:bg-black/5'}`;
   const dropdownClass = theme === 'dark' ? 'bg-slate-800 border-slate-700 text-slate-200' : 'bg-white border-slate-200 text-slate-700';
+  
+  const getInputClass = (isInput: boolean = true) => 
+    `w-full border rounded-lg p-2.5 focus:ring-2 focus:ring-indigo-100 outline-none transition-colors ${
+      theme === 'dark' 
+        ? (isInput ? 'bg-slate-800 border-slate-700 text-slate-200 placeholder-slate-400' : 'bg-slate-800 border-slate-700 text-slate-200') 
+        : (isInput ? 'bg-white border-slate-300 text-slate-700 placeholder-slate-400' : 'bg-white border-slate-300 text-slate-700')
+    }`;
 
   return (
     <div className={`min-h-screen font-sans transition-colors duration-300 pb-20 md:pb-0 ${bgClass}`}>
@@ -309,7 +316,7 @@ function App({ instanceId, onExit }: AppProps) {
            <div className="flex items-center gap-4">
                {/* Controls specific to view */}
                {activeMainTab === 'insights' && activeInsightsView === 'global' && (
-                 <div className="relative hidden sm:block">
+                 <div className="relative">
                     <select 
                       value={dashboardRange} onChange={(e) => setDashboardRange(e.target.value as TimeRange)}
                       className={`appearance-none border-none rounded-lg py-1.5 pl-3 pr-8 text-xs font-semibold focus:ring-2 focus:ring-indigo-500 cursor-pointer transition-colors ${theme === 'dark' ? 'bg-slate-800 text-slate-200' : 'bg-slate-100 text-slate-700'}`}
@@ -387,6 +394,7 @@ function App({ instanceId, onExit }: AppProps) {
                         <MonthlyWorksheet 
                           users={users}
                           entries={entries} budgets={budgets} categories={categories} savings={savings} trips={trips} monthId={currentMonth} currency={currency}
+                          getInputClass={getInputClass}
                           onUpdateEntry={(cid, acc, amt, tid, desc) => {
                               setEntries(prev => {
                                   const singleSum = prev.filter(e => e.categoryId === cid && e.account === acc && e.monthId === currentMonth && e.entryType === 'single').reduce((s, e) => s + e.amount, 0);
@@ -406,7 +414,7 @@ function App({ instanceId, onExit }: AppProps) {
                         />
                     )}
                     {activeRegisterView === 'single' && (
-                        <div className="max-w-xl mx-auto"><SingleEntryForm categories={categories} trips={trips} currentMonth={currentMonth} users={users} currency={currency} onAddEntry={(e) => setEntries(p => [...p, { ...e, id: Math.random().toString(36) }])} /></div>
+                        <div className="max-w-xl mx-auto"><SingleEntryForm categories={categories} trips={trips} currentMonth={currentMonth} users={users} currency={currency} getInputClass={getInputClass} onAddEntry={(e) => setEntries(p => [...p, { ...e, id: Math.random().toString(36) }])} /></div>
                     )}
                     {activeRegisterView === 'income' && (
                         <IncomeManager incomes={incomes} currentMonth={currentMonth} users={users} currency={currency} onAddIncome={(s, a, r, ir, mid) => setIncomes(p => [...p, {id: Math.random().toString(36), monthId: mid, source: s, amount: a, recipient: r, isRecurring: ir}])} onDeleteIncome={(id) => setIncomes(p => p.filter(i => i.id !== id))} />
@@ -423,7 +431,7 @@ function App({ instanceId, onExit }: AppProps) {
 
                     {activePlanningView === 'travel' && <TravelDashboard users={users} trips={trips} entries={entries} currency={currency} onAddTrip={(t) => setTrips(p => [...p, { ...t, id: Math.random().toString(36) }])} onUpdateTrip={(updatedTrip) => setTrips(p => p.map(t => t.id === updatedTrip.id ? updatedTrip : t))} />}
                     
-                    {activePlanningView === 'budget' && <BudgetManager budgets={budgets} categories={categories} savings={savings} entries={entries} totalIncome={currentTotalIncome} users={users} currency={currency}
+                    {activePlanningView === 'budget' && <BudgetManager budgets={budgets} categories={categories} savings={savings} entries={entries} totalIncome={currentTotalIncome} users={users} currency={currency} getInputClass={getInputClass}
                       onAddBudget={(cid, lim, acc) => setBudgets(p => [...p, { categoryId: cid, limit: lim, account: acc }])}
                       onAddGoal={(n, t, tt, i, acc, sd, td) => {
                           const gid = n.toLowerCase().replace(/\s+/g, '_') + '_' + Math.random().toString(36).substr(2, 4);
@@ -436,9 +444,12 @@ function App({ instanceId, onExit }: AppProps) {
             
             {activeMainTab === 'settings' && (
               <SettingsPage 
+                  instanceName={instanceName}
                   users={users} 
                   currency={currency} 
                   theme={theme}
+                  getInputClass={getInputClass}
+                  onUpdateInstanceName={setInstanceName}
                   onUpdateUser={handleUpdateUser} 
                   onUpdateCurrency={setCurrency} 
                   onUpdateTheme={handleUpdateTheme}

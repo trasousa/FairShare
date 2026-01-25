@@ -3,9 +3,12 @@ import { User, UserId, CurrencyCode } from '../types';
 import { Save, User as UserIcon, Upload, RotateCcw, Download, Database, Sun, Moon, LogOut, Users } from 'lucide-react';
 
 interface SettingsPageProps {
+  instanceName: string;
   users: Record<string, User>;
   currency: CurrencyCode;
   theme?: 'light' | 'dark';
+  getInputClass: (isInput?: boolean) => string;
+  onUpdateInstanceName: (newName: string) => void;
   onUpdateUser: (id: UserId, data: Partial<User>) => void;
   onUpdateCurrency: (c: CurrencyCode) => void;
   onUpdateTheme: (t: 'light' | 'dark') => void;
@@ -13,8 +16,9 @@ interface SettingsPageProps {
   onExit: () => void;
 }
 
-export const SettingsPage: React.FC<SettingsPageProps> = ({ users, currency, theme = 'light', onUpdateUser, onUpdateCurrency, onUpdateTheme, onExport, onExit }) => {
+export const SettingsPage: React.FC<SettingsPageProps> = ({ instanceName, users, currency, theme = 'light', getInputClass, onUpdateInstanceName, onUpdateUser, onUpdateCurrency, onUpdateTheme, onExport, onExit }) => {
   const [localUsers, setLocalUsers] = useState(users);
+  const [localInstanceName, setLocalInstanceName] = useState(instanceName);
   const [successMsg, setSuccessMsg] = useState('');
   const [activePicker, setActivePicker] = useState<UserId | null>(null);
 
@@ -38,6 +42,9 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ users, currency, the
     Object.entries(localUsers).forEach(([id, data]) => {
         onUpdateUser(id as UserId, data);
     });
+    if (localInstanceName !== instanceName) {
+        onUpdateInstanceName(localInstanceName);
+    }
     setSuccessMsg('Settings saved successfully!');
     setTimeout(() => setSuccessMsg(''), 3000);
   };
@@ -95,7 +102,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ users, currency, the
                         type="text" 
                         value={currentAvatar}
                         onChange={(e) => handleChange(id, 'avatar', e.target.value)}
-                        className="w-full text-[10px] border border-slate-200 rounded px-2 py-1 text-slate-400 focus:ring-1 focus:ring-indigo-500 outline-none font-mono"
+                        className={getInputClass(false)}
                         placeholder="Or paste custom URL..."
                     />
                 </div>
@@ -152,6 +159,15 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ users, currency, the
              </h3>
              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                  <div>
+                     <label className="block text-sm font-medium text-slate-700 mb-2">Instance Name</label>
+                     <input 
+                         type="text" 
+                         value={localInstanceName}
+                         onChange={(e) => setLocalInstanceName(e.target.value)}
+                         className={getInputClass()}
+                     />
+                 </div>
+                 <div>
                      <label className="block text-sm font-medium text-slate-700 mb-2">Display Currency</label>
                      <div className="flex bg-slate-100 rounded-lg p-1 w-fit">
                          {['USD', 'EUR', 'GBP', 'JPY', 'BRL'].map(c => (
@@ -184,13 +200,16 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ users, currency, the
                      </div>
                  </div>
 
-                 <div className="md:col-span-2 flex justify-end">
+                 <div className="md:col-span-2 flex flex-col items-end gap-2">
                      <button 
                         onClick={onExport}
                         className="flex items-center gap-2 border border-slate-300 text-slate-700 px-4 py-2.5 rounded-lg text-sm font-medium hover:bg-slate-50 transition"
                      >
                          <Download size={16}/> Export Database (JSON)
                      </button>
+                     <span className="text-[10px] text-slate-400">
+                        To save to Google Drive, download the JSON file and upload it to your Drive folder.
+                     </span>
                  </div>
              </div>
         </div>
@@ -213,7 +232,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ users, currency, the
                                     type="text" 
                                     value={localUsers.shared.name}
                                     onChange={(e) => handleChange('shared', 'name', e.target.value)}
-                                    className="w-full border border-slate-300 rounded-lg p-2.5 focus:ring-2 focus:ring-indigo-100 outline-none"
+                                    className={getInputClass()}
                                 />
                             </div>
                             <div>
@@ -257,7 +276,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ users, currency, the
                             type="text" 
                             value={localUsers.user_1.name}
                             onChange={(e) => handleChange('user_1', 'name', e.target.value)}
-                            className="w-full border border-slate-300 rounded-lg p-2.5 focus:ring-2 focus:ring-indigo-100 outline-none"
+                            className={getInputClass()}
                         />
                     </div>
                     <div>
@@ -301,7 +320,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ users, currency, the
                             type="text" 
                             value={localUsers.user_2.name}
                             onChange={(e) => handleChange('user_2', 'name', e.target.value)}
-                            className="w-full border border-slate-300 rounded-lg p-2.5 focus:ring-2 focus:ring-indigo-100 outline-none"
+                            className={getInputClass()}
                         />
                     </div>
                     <div>

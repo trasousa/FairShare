@@ -224,7 +224,23 @@ export const DashboardCharts: React.FC<DashboardChartsProps> = ({ entries, categ
   return (
     <div className="space-y-6">
         
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        {/* Mobile Summary Row */}
+        <div className="md:hidden flex gap-2 overflow-x-auto pb-2 custom-scrollbar snap-x">
+            <div className="snap-start min-w-[140px] bg-indigo-500 rounded-xl p-3 text-white">
+                <span className="text-[9px] uppercase opacity-80 block">Net Worth</span>
+                <span className="text-lg font-bold">{formatCurrency(totalAccumulatedWealth, currency)}</span>
+            </div>
+            <div className="snap-start min-w-[140px] bg-slate-800 rounded-xl p-3 text-white">
+                <span className="text-[9px] uppercase opacity-80 block">Total Income</span>
+                <span className="text-lg font-bold">{formatCurrency(incomeTotals.SHARED + incomeTotals.USER_1 + incomeTotals.USER_2, currency)}</span>
+            </div>
+            <div className="snap-start min-w-[140px] bg-slate-700 rounded-xl p-3 text-white">
+                <span className="text-[9px] uppercase opacity-80 block">Total Expenses</span>
+                <span className="text-lg font-bold">{formatCurrency(totals.SHARED + totals.USER_1 + totals.USER_2, currency)}</span>
+            </div>
+        </div>
+
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
             {[{title: 'Overall', income: incomeTotals.SHARED + incomeTotals.USER_1 + incomeTotals.USER_2, expense: totals.SHARED + totals.USER_1 + totals.USER_2, icon: Wallet, color: '#6366f1', id: 'ALL', desc: 'Total of all shared and personal expenses combined.'},
               {title: 'Shared', income: incomeTotals.SHARED, expense: totals.SHARED, icon: Users, color: users.shared?.color || '#a855f7', id: 'SHARED', desc: 'Shared account activity.', avatar: users.shared?.avatar}, 
               {title: users.user_1.name, income: incomeTotals.USER_1, expense: totals.USER_1, icon: UserIcon, color: users.user_1.color, id: 'USER_1', desc: `${users.user_1.name}'s personal activity.`, avatar: users.user_1.avatar}, 
@@ -233,27 +249,27 @@ export const DashboardCharts: React.FC<DashboardChartsProps> = ({ entries, categ
                     key={idx} 
                     title={card.desc}
                     onClick={() => setActiveFilter(card.id as AccountType | 'ALL')}
-                    className={`bg-white p-4 rounded-xl border shadow-sm flex flex-col justify-between transition-all w-full text-left h-full ${activeFilter === card.id ? 'ring-2 scale-[1.02]' : 'hover:shadow-md'}`}
+                    className={`bg-white p-3 md:p-4 rounded-xl border shadow-sm flex flex-col justify-between transition-all w-full text-left h-full ${activeFilter === card.id ? 'ring-2 scale-[1.02]' : 'hover:shadow-md'}`}
                     style={{ borderColor: activeFilter === card.id ? card.color : '#e2e8f0', boxShadow: activeFilter === card.id ? `0 0 0 2px ${card.color}20` : '' }}
                 >
-                    <div className="flex items-center gap-3 mb-3">
+                    <div className="flex items-center gap-2 mb-2 md:mb-3">
                         <div 
-                            className="w-8 h-8 rounded-full flex items-center justify-center overflow-hidden shadow-sm border border-slate-100"
+                            className="w-6 h-6 md:w-8 md:h-8 rounded-full flex items-center justify-center overflow-hidden shadow-sm border border-slate-100"
                             style={{ backgroundColor: `${card.color}20`, color: card.color }}
                         >
                             {card.avatar ? <img src={card.avatar} className="w-full h-full object-cover" alt={card.title} /> : <card.icon size={16} />}
                         </div>
-                        <p className="text-xs font-bold uppercase tracking-wider" style={{ color: '#94a3b8' }}>{card.title}</p>
+                        <p className="text-[10px] md:text-xs font-bold uppercase tracking-wider truncate" style={{ color: '#94a3b8' }}>{card.title}</p>
                     </div>
                     
                     <div className="space-y-1">
-                        <div className="flex justify-between items-end">
-                            <span className="text-[10px] font-medium text-slate-400">Income</span>
-                            <span className="text-sm font-bold" style={{ color: card.color, opacity: 0.8 }}>{formatCurrency(card.income, currency)}</span>
+                        <div className="flex justify-between items-end gap-1">
+                            <span className="text-[9px] md:text-[10px] font-medium text-slate-400">Inc</span>
+                            <span className="text-xs md:text-sm font-bold" style={{ color: card.color, opacity: 0.8 }}>{formatCurrency(card.income, currency)}</span>
                         </div>
-                        <div className="flex justify-between items-end">
-                            <span className="text-[10px] font-medium text-slate-400">Expense</span>
-                            <span className="text-sm font-bold" style={{ color: card.color }}>{formatCurrency(card.expense, currency)}</span>
+                        <div className="flex justify-between items-end gap-1">
+                            <span className="text-[9px] md:text-[10px] font-medium text-slate-400">Exp</span>
+                            <span className="text-xs md:text-sm font-bold" style={{ color: card.color }}>{formatCurrency(card.expense, currency)}</span>
                         </div>
                     </div>
                 </button>
@@ -289,7 +305,7 @@ export const DashboardCharts: React.FC<DashboardChartsProps> = ({ entries, categ
                                 <XAxis dataKey="month" axisLine={false} tickLine={false} tick={{fill: '#64748b', fontSize: 10}} tickFormatter={(val) => { const [y, m] = val.split('-'); return new Date(parseInt(y), parseInt(m) - 1).toLocaleDateString('default', { month: 'short' }); }} />
                                 <YAxis axisLine={false} tickLine={false} tick={{fill: '#64748b', fontSize: 10}} tickFormatter={(val) => `${val/1000}k`} />
                                 <Tooltip content={<CustomTooltip currency={currency} />} cursor={{fill: '#f8fafc'}} />
-                                <Legend 
+                                 <Legend 
                                     verticalAlign="top" 
                                     align="right" 
                                     iconSize={8}
@@ -300,14 +316,14 @@ export const DashboardCharts: React.FC<DashboardChartsProps> = ({ entries, categ
                                 />
                                 
                                 {/* Stack 1: Income (Side A) - Using Alpha for Income distinction */}
-                                <Bar dataKey="INCOME_SHARED" name="Shared Income" stackId="income" fill={users.shared?.color} fillOpacity={0.3} hide={!visibleBars.INCOME_SHARED} />
-                                <Bar dataKey="INCOME_U1" name={`${users.user_1.name} Income`} stackId="income" fill={users.user_1.color} fillOpacity={0.3} hide={!visibleBars.INCOME_U1} />
-                                <Bar dataKey="INCOME_U2" name={`${users.user_2.name} Income`} stackId="income" fill={users.user_2.color} fillOpacity={0.3} radius={[4, 4, 0, 0]} hide={!visibleBars.INCOME_U2} />
+                                <Bar dataKey="INCOME_SHARED" name="Inc: Shared" stackId="income" fill={users.shared?.color} fillOpacity={0.3} hide={!visibleBars.INCOME_SHARED} />
+                                <Bar dataKey="INCOME_U1" name={`Inc: ${users.user_1.name}`} stackId="income" fill={users.user_1.color} fillOpacity={0.3} hide={!visibleBars.INCOME_U1} />
+                                <Bar dataKey="INCOME_U2" name={`Inc: ${users.user_2.name}`} stackId="income" fill={users.user_2.color} fillOpacity={0.3} radius={[4, 4, 0, 0]} hide={!visibleBars.INCOME_U2} />
                                 
                                 {/* Stack 2: Expenses (Side B) - Solid colors for Expenses */}
-                                <Bar dataKey="SHARED" name="Shared Exp" stackId="exp" fill={users.shared?.color} hide={!visibleBars.SHARED} />
-                                <Bar dataKey="USER_1" name={`${users.user_1.name} Exp`} stackId="exp" fill={users.user_1.color} hide={!visibleBars.USER_1} />
-                                <Bar dataKey="USER_2" name={`${users.user_2.name} Exp`} stackId="exp" fill={users.user_2.color} radius={[4, 4, 0, 0]} hide={!visibleBars.USER_2} />
+                                <Bar dataKey="SHARED" name="Exp: Shared" stackId="exp" fill={users.shared?.color} hide={!visibleBars.SHARED} />
+                                <Bar dataKey="USER_1" name={`Exp: ${users.user_1.name}`} stackId="exp" fill={users.user_1.color} hide={!visibleBars.USER_1} />
+                                <Bar dataKey="USER_2" name={`Exp: ${users.user_2.name}`} stackId="exp" fill={users.user_2.color} radius={[4, 4, 0, 0]} hide={!visibleBars.USER_2} />
                             </BarChart>
                         </ResponsiveContainer>
                     ) : (

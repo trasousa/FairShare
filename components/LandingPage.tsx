@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useRef } from 'react';
-import { getInstances, createDemoInstance, deleteInstance, saveInstance } from '../services/storage';
-import { Plus, Trash2, ArrowRight, Wallet, Layout, AlertTriangle, Upload, ServerCrash, RefreshCcw, FileJson } from 'lucide-react';
+import { getInstances, createDemoInstance, deleteInstance, saveInstance, renameInstance } from '../services/storage';
+import { Plus, Trash2, ArrowRight, Wallet, Layout, AlertTriangle, Upload, ServerCrash, RefreshCcw, FileJson, Edit2, Check, X } from 'lucide-react';
 import { AppInstance } from '../types';
 
 interface LandingPageProps {
@@ -14,6 +14,8 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onSelectInstance, onCr
   const [deleteCandidate, setDeleteCandidate] = useState<string | null>(null);
   const [backendError, setBackendError] = useState(false);
   const [actionError, setActionError] = useState('');
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editName, setEditName] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -44,6 +46,30 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onSelectInstance, onCr
         console.error(e);
         setActionError('Failed to launch demo. Is the backend running?');
     }
+  };
+
+  const startRenaming = (e: React.MouseEvent, inst: { id: string, name: string }) => {
+      e.stopPropagation();
+      setEditingId(inst.id);
+      setEditName(inst.name);
+  };
+
+  const submitRename = async (e: React.MouseEvent) => {
+      e.stopPropagation();
+      if (!editingId || !editName.trim()) return;
+      try {
+          await renameInstance(editingId, editName.trim());
+          setEditingId(null);
+          loadInstances();
+      } catch (e) {
+          setActionError('Failed to rename instance.');
+      }
+  };
+
+  const cancelRename = (e: React.MouseEvent) => {
+      e.stopPropagation();
+      setEditingId(null);
+      setEditName('');
   };
 
   const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -127,15 +153,15 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onSelectInstance, onCr
   }
 
   return (
-    <div className="min-h-dvh bg-slate-900 flex flex-col items-center p-6 sm:p-8 md:p-12">
+    <div className="min-h-dvh bg-slate-900 flex flex-col items-center p-4 sm:p-6 overflow-y-auto">
         <div className="max-w-4xl w-full">
-            <div className="text-center mb-12">
-                <div className="inline-flex items-center justify-center w-20 h-20 bg-indigo-600 rounded-2xl mb-6 shadow-lg shadow-indigo-500/30 transform rotate-3">
-                    <span className="text-4xl font-bold text-white">FS</span>
+            <div className="text-center mb-8">
+                <div className="inline-flex items-center justify-center w-16 h-16 bg-indigo-600 rounded-2xl mb-4 shadow-lg shadow-indigo-500/30 transform rotate-3">
+                    <span className="text-3xl font-bold text-white">FS</span>
                 </div>
-                <h1 className="text-5xl font-extrabold text-white mb-4 tracking-tight">FairShare</h1>
-                <p className="text-xl text-slate-400 max-w-2xl mx-auto font-light">
-                    The smart finance tracker for couples. Balance separate incomes, share expenses fairly, and build wealth together.
+                <h1 className="text-4xl font-extrabold text-white mb-2 tracking-tight">FairShare</h1>
+                <p className="text-lg text-slate-400 max-w-xl mx-auto font-light">
+                    The smart finance tracker for couples.
                 </p>
             </div>
             
@@ -145,36 +171,56 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onSelectInstance, onCr
                 </div>
             )}
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 {/* Instance List */}
-                <div className="bg-slate-800/50 backdrop-blur-sm rounded-3xl shadow-xl border border-slate-700 p-8 flex flex-col">
-                    <h2 className="text-xl font-bold text-white mb-6 flex items-center gap-3">
-                        <Wallet className="text-indigo-400"/> Your Trackers
+                <div className="bg-slate-800/50 backdrop-blur-sm rounded-3xl shadow-xl border border-slate-700 p-6 flex flex-col max-h-[500px] overflow-hidden">
+                    <h2 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
+                        <Wallet className="text-indigo-400" size={20}/> Your Trackers
                     </h2>
                     
-                    <div className="space-y-4 flex-1">
+                    <div className="space-y-3 flex-1 overflow-y-auto pr-2 custom-scrollbar">
                         {instances.map(inst => (
                             <div 
                                 key={inst.id}
-                                onClick={() => onSelectInstance(inst.id)}
-                                className="group flex items-center justify-between p-4 rounded-2xl border border-slate-700 bg-slate-800 hover:border-indigo-500/50 hover:bg-slate-700 transition cursor-pointer shadow-sm"
+                                onClick={() => editingId !== inst.id && onSelectInstance(inst.id)}
+                                className={`group flex items-center justify-between p-3 rounded-xl border transition cursor-pointer shadow-sm ${editingId === inst.id ? 'bg-slate-700 border-indigo-500' : 'bg-slate-800 border-slate-700 hover:border-indigo-500/50 hover:bg-slate-700'}`}
                             >
-                                <div>
-                                    <h3 className="font-bold text-slate-200 group-hover:text-white transition">{inst.name}</h3>
-                                    <p className="text-xs text-slate-500 font-medium group-hover:text-slate-400">Last accessed: {new Date(inst.lastAccessed).toLocaleDateString()}</p>
-                                </div>
-                                <div className="flex items-center gap-3">
-                                    <div className="bg-slate-700 p-2 rounded-full group-hover:bg-indigo-500/20 transition">
-                                        <ArrowRight size={16} className="text-slate-400 group-hover:text-indigo-400 transition" />
+                                {editingId === inst.id ? (
+                                    <div className="flex items-center gap-2 w-full">
+                                        <input 
+                                            autoFocus
+                                            type="text" 
+                                            value={editName}
+                                            onChange={(e) => setEditName(e.target.value)}
+                                            onClick={(e) => e.stopPropagation()}
+                                            className="bg-slate-900 border border-indigo-500 rounded px-2 py-1 text-white text-sm w-full outline-none"
+                                        />
+                                        <button onClick={submitRename} className="p-1 text-emerald-400 hover:bg-emerald-400/10 rounded"><Check size={16}/></button>
+                                        <button onClick={cancelRename} className="p-1 text-slate-400 hover:bg-slate-600 rounded"><X size={16}/></button>
                                     </div>
-                                    <button 
-                                        onClick={(e) => { e.stopPropagation(); setDeleteCandidate(inst.id); }}
-                                        className="p-2 text-slate-600 hover:text-red-400 hover:bg-red-900/20 rounded-full transition"
-                                        title="Delete Instance"
-                                    >
-                                        <Trash2 size={16} />
-                                    </button>
-                                </div>
+                                ) : (
+                                    <>
+                                        <div>
+                                            <div className="flex items-center gap-2">
+                                                <h3 className="font-bold text-slate-200 group-hover:text-white transition text-sm">{inst.name}</h3>
+                                                <button onClick={(e) => startRenaming(e, inst)} className="opacity-0 group-hover:opacity-100 text-slate-500 hover:text-indigo-400 transition p-1"><Edit2 size={12}/></button>
+                                            </div>
+                                            <p className="text-[10px] text-slate-500 font-medium group-hover:text-slate-400">Accessed: {new Date(inst.lastAccessed).toLocaleDateString()}</p>
+                                        </div>
+                                        <div className="flex items-center gap-2">
+                                            <div className="bg-slate-700 p-1.5 rounded-full group-hover:bg-indigo-500/20 transition">
+                                                <ArrowRight size={14} className="text-slate-400 group-hover:text-indigo-400 transition" />
+                                            </div>
+                                            <button 
+                                                onClick={(e) => { e.stopPropagation(); setDeleteCandidate(inst.id); }}
+                                                className="p-1.5 text-slate-600 hover:text-red-400 hover:bg-red-900/20 rounded-full transition opacity-0 group-hover:opacity-100"
+                                                title="Delete Instance"
+                                            >
+                                                <Trash2 size={14} />
+                                            </button>
+                                        </div>
+                                    </>
+                                )}
                             </div>
                         ))}
                         
@@ -187,21 +233,21 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onSelectInstance, onCr
                 </div>
 
                 {/* Actions */}
-                <div className="flex flex-col gap-6">
+                <div className="flex flex-col gap-4">
                     <div 
                         onClick={onCreateNew}
-                        className="bg-slate-800/50 backdrop-blur-sm p-8 rounded-3xl shadow-xl border border-slate-700 cursor-pointer hover:bg-slate-800 hover:border-slate-600 transition group flex-1"
+                        className="bg-slate-800/50 backdrop-blur-sm p-6 rounded-3xl shadow-xl border border-slate-700 cursor-pointer hover:bg-slate-800 hover:border-slate-600 transition group flex-1"
                     >
-                        <div className="w-14 h-14 bg-emerald-900/30 text-emerald-400 rounded-2xl flex items-center justify-center mb-6 group-hover:bg-emerald-900/50 transition-colors">
-                            <Plus size={28} />
+                        <div className="w-12 h-12 bg-emerald-900/30 text-emerald-400 rounded-2xl flex items-center justify-center mb-4 group-hover:bg-emerald-900/50 transition-colors">
+                            <Plus size={24} />
                         </div>
-                        <h3 className="text-2xl font-bold text-white mb-2">Create New Tracker</h3>
-                        <p className="text-slate-400 leading-relaxed">Start fresh with a new database. Set up generic profiles or customize names, currency, and split rules.</p>
+                        <h3 className="text-xl font-bold text-white mb-1">Create New Tracker</h3>
+                        <p className="text-slate-400 text-sm leading-relaxed">Start fresh with a new database. Set up generic profiles or customize names, currency, and split rules.</p>
                     </div>
 
                     <div 
                         onClick={() => fileInputRef.current?.click()}
-                        className="bg-slate-800/50 backdrop-blur-sm p-8 rounded-3xl shadow-xl border border-slate-700 cursor-pointer hover:bg-slate-800 hover:border-slate-600 transition group flex-1"
+                        className="bg-slate-800/50 backdrop-blur-sm p-6 rounded-3xl shadow-xl border border-slate-700 cursor-pointer hover:bg-slate-800 hover:border-slate-600 transition group flex-1"
                     >
                         <input 
                             type="file" 
@@ -210,19 +256,19 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onSelectInstance, onCr
                             accept=".json" 
                             className="hidden" 
                         />
-                        <div className="w-14 h-14 bg-blue-900/30 text-blue-400 rounded-2xl flex items-center justify-center mb-6 group-hover:bg-blue-900/50 transition-colors">
-                            <Upload size={28} />
+                        <div className="w-12 h-12 bg-blue-900/30 text-blue-400 rounded-2xl flex items-center justify-center mb-4 group-hover:bg-blue-900/50 transition-colors">
+                            <Upload size={24} />
                         </div>
-                        <h3 className="text-2xl font-bold text-white mb-2">Upload Backup</h3>
-                        <p className="text-slate-400 leading-relaxed">Restore a tracker from a <code>.json</code> backup file to pick up exactly where you left off.</p>
+                        <h3 className="text-xl font-bold text-white mb-1">Upload Backup</h3>
+                        <p className="text-slate-400 text-sm leading-relaxed">Restore a tracker from a <code>.json</code> backup file to pick up exactly where you left off.</p>
                     </div>
 
                     <div className="text-center mt-2">
                         <button 
                             onClick={handleCreateDemo}
-                            className="text-slate-500 hover:text-indigo-400 text-sm font-semibold flex items-center justify-center gap-2 mx-auto transition"
+                            className="text-slate-500 hover:text-indigo-400 text-xs font-semibold flex items-center justify-center gap-2 mx-auto transition"
                         >
-                            <Layout size={16} /> Launch Demo Instance
+                            <Layout size={14} /> Launch Demo Instance
                         </button>
                     </div>
                 </div>

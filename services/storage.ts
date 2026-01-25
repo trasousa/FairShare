@@ -45,6 +45,15 @@ export const deleteInstance = async (id: string) => {
     if (!response.ok) throw new Error('Delete failed');
 };
 
+export const renameInstance = async (id: string, newName: string) => {
+    const response = await fetch(`${API_URL}/instance/${id}/rename`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: newName })
+    });
+    if (!response.ok) throw new Error(`Rename failed: ${response.statusText}`);
+};
+
 // --- FACTORY FUNCTIONS ---
 
 export const createDemoInstance = async (): Promise<AppInstance> => {

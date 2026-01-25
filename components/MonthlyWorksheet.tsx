@@ -11,13 +11,16 @@ interface MonthlyWorksheetProps {
   trips: Trip[];
   monthId: string;
   currency: CurrencyCode;
+  getInputClass: (isInput?: boolean) => string;
   onUpdateEntry: (categoryId: string, account: AccountType, amount: number, tripId?: string, description?: string) => void;
   onAddCategory: (name: string, group: string, account: AccountType) => void;
   onEditCategory: (id: string, newName: string) => void;
   onDateClick: () => void;
 }
 
-const MoneyInput = ({ value, onChange, onDescriptionChange, description, color, currency, readOnly = false }: { value: number; onChange: (val: number) => void; onDescriptionChange: (val: string) => void; description?: string; color: string; currency: CurrencyCode; readOnly?: boolean; }) => {
+import { ChevronDown, ChevronUp } from 'lucide-react';
+
+const MoneyInput = ({ value, onChange, onDescriptionChange, description, color, currency, readOnly = false, getInputClass }: { value: number; onChange: (val: number) => void; onDescriptionChange: (val: string) => void; description?: string; color: string; currency: CurrencyCode; readOnly?: boolean; getInputClass: (isInput?: boolean) => string; }) => {
   const [localValue, setLocalValue] = useState(value === 0 ? '' : value.toString());
   const [showDesc, setShowDesc] = useState(false);
 
@@ -40,20 +43,21 @@ const MoneyInput = ({ value, onChange, onDescriptionChange, description, color, 
 
   return (
     <div className="relative group/input">
-        <span className="absolute left-2 top-1/2 -translate-y-1/2 text-slate-400 text-xs">{symbol}</span>
+        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs font-medium pointer-events-none z-10">{symbol}</span>
         <input 
             type="text" 
             inputMode="decimal"
             placeholder="0"
             readOnly={readOnly}
-            className={`w-full pl-6 pr-8 py-1.5 text-sm border rounded-md outline-none focus:ring-2 transition text-right ${readOnly ? 'bg-slate-50 text-slate-400 cursor-not-allowed' : 'bg-white border-slate-300 text-slate-700'}`}
+            className={getInputClass()}
             style={!readOnly && value > 0 ? { 
                 backgroundColor: `${color}10`, 
                 borderColor: `${color}50`, 
                 color: color, 
                 fontWeight: 'bold',
-                boxShadow: `0 0 0 1px ${color}20`
-            } : {}}
+                boxShadow: `0 0 0 1px ${color}20`,
+                paddingLeft: '2rem'
+            } : { paddingLeft: '2rem' }}
             value={localValue}
             onChange={handleChange}
             onBlur={() => setLocalValue(value === 0 ? '' : value.toString())}
@@ -73,7 +77,7 @@ const MoneyInput = ({ value, onChange, onDescriptionChange, description, color, 
                         <textarea 
                             value={description || ''} 
                             onChange={e => onDescriptionChange(e.target.value)}
-                            className="w-full text-xs border border-slate-200 rounded-lg p-2.5 outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-200 h-24 resize-none text-slate-700 bg-slate-50 focus:bg-white transition-colors"
+                            className={getInputClass(false)}
                             placeholder="Add a note or description..."
                             autoFocus
                         />
@@ -93,7 +97,7 @@ const MoneyInput = ({ value, onChange, onDescriptionChange, description, color, 
   );
 };
 
-export const MonthlyWorksheet: React.FC<MonthlyWorksheetProps> = ({ entries, budgets, categories, savings = [], users, trips, monthId, currency, onUpdateEntry, onAddCategory, onEditCategory, onDateClick }) => {
+export const MonthlyWorksheet: React.FC<MonthlyWorksheetProps> = ({ entries, budgets, categories, savings = [], users, trips, monthId, currency, getInputClass, onUpdateEntry, onAddCategory, onEditCategory, onDateClick }) => {
   const [isAddingCat, setIsAddingCat] = useState(false);
   const [newCatName, setNewCatName] = useState('');
   const [newCatGroup, setNewCatGroup] = useState('VARIABLE');
@@ -101,6 +105,9 @@ export const MonthlyWorksheet: React.FC<MonthlyWorksheetProps> = ({ entries, bud
   const [activeTripId, setActiveTripId] = useState<string>('');
   const [editingCatId, setEditingCatId] = useState<string | null>(null);
   const [editingName, setEditingName] = useState('');
+  const [collapsedSections, setCollapsedSections] = useState<Record<string, boolean>>({});
+
+  const toggleSection = (title: string) => setCollapsedSections(prev => ({ ...prev, [title]: !prev[title] }));
 
   const getAmount = (catId: string, account: AccountType) => entries.filter(e => e.categoryId === catId && e.account === account && e.monthId === monthId).reduce((sum, e) => sum + e.amount, 0);
   const getDescription = (catId: string, account: AccountType) => {
@@ -135,15 +142,24 @@ export const MonthlyWorksheet: React.FC<MonthlyWorksheetProps> = ({ entries, bud
     if (isSavingsSection) sectionCategories = sectionCategories.filter(cat => savings.some(s => s.id === cat.id));
     if (sectionCategories.length === 0) return null;
 
+    const isCollapsed = collapsedSections[title];
+
     return (
     <div className="mb-8 animate-in fade-in slide-in-from-bottom-2 duration-500">
-      <div className="flex justify-between items-end mb-4 border-b border-slate-100 pb-2">
-          <h3 className={`text-sm font-bold uppercase tracking-wider ${isSavingsSection ? 'text-emerald-600 flex items-center gap-2' : 'text-slate-400'}`}>
-              {isSavingsSection && <TrendingUp size={16}/>}
-              {title}
-          </h3>
-          {isTravelSection && (
-              <div className="flex items-center gap-2">
+      <div 
+        className="flex justify-between items-end mb-4 border-b border-slate-100 pb-2 cursor-pointer hover:bg-slate-50/50 transition-colors rounded px-2 select-none"
+        onClick={() => toggleSection(title)}
+      >
+          <div className="flex items-center gap-2">
+            <h3 className={`text-sm font-bold uppercase tracking-wider ${isSavingsSection ? 'text-emerald-600 flex items-center gap-2' : 'text-slate-400'}`}>
+                {isSavingsSection && <TrendingUp size={16}/>}
+                {title}
+            </h3>
+            {isCollapsed ? <ChevronDown size={14} className="text-slate-400"/> : <ChevronUp size={14} className="text-slate-400"/>}
+          </div>
+
+          {isTravelSection && !isCollapsed && (
+              <div className="flex items-center gap-2" onClick={e => e.stopPropagation()}>
                   <span className="text-xs text-slate-500 font-medium">Assign to Trip:</span>
                   <div className="relative">
                       <select value={activeTripId} onChange={(e) => setActiveTripId(e.target.value)} className="pl-7 pr-3 py-1 text-xs border border-indigo-200 bg-indigo-50 text-indigo-700 rounded-md outline-none focus:ring-2 focus:ring-indigo-200 cursor-pointer appearance-none">
@@ -156,61 +172,65 @@ export const MonthlyWorksheet: React.FC<MonthlyWorksheetProps> = ({ entries, bud
           )}
       </div>
 
-      <div className="hidden md:grid grid-cols-12 gap-4 items-center mb-2 px-2 text-xs font-semibold text-slate-400">
-          <div className="col-span-5">Category</div>
-          <div className="col-span-7 grid grid-cols-3 gap-2">
-            <div>Shared</div>
-            <div>{users.user_1?.name}</div>
-            <div>{users.user_2?.name}</div>
-          </div>
-      </div>
+      {!isCollapsed && (
+        <>
+        <div className="hidden md:grid grid-cols-12 gap-4 items-center mb-2 px-2 text-xs font-semibold text-slate-400">
+            <div className="col-span-5">Category</div>
+            <div className="col-span-7 grid grid-cols-3 gap-2">
+                <div>Shared</div>
+                <div>{users.user_1?.name}</div>
+                <div>{users.user_2?.name}</div>
+            </div>
+        </div>
 
-      <div className="space-y-4">
-        {sectionCategories.map(cat => {
-            const budget = getBudget(cat.id);
-            const sharedVal = getAmount(cat.id, 'SHARED');
-            const u1Val = getAmount(cat.id, 'USER_1');
-            const u2Val = getAmount(cat.id, 'USER_2');
-            let rowTotal = (showShared ? sharedVal : 0) + (showU1 ? u1Val : 0) + (showU2 ? u2Val : 0);
-            const isOverBudget = budget > 0 && rowTotal > budget;
-            const isEditing = editingCatId === cat.id;
+        <div className="space-y-4">
+            {sectionCategories.map(cat => {
+                const budget = getBudget(cat.id);
+                const sharedVal = getAmount(cat.id, 'SHARED');
+                const u1Val = getAmount(cat.id, 'USER_1');
+                const u2Val = getAmount(cat.id, 'USER_2');
+                let rowTotal = (showShared ? sharedVal : 0) + (showU1 ? u1Val : 0) + (showU2 ? u2Val : 0);
+                const isOverBudget = budget > 0 && rowTotal > budget;
+                const isEditing = editingCatId === cat.id;
 
-            return (
-              <div key={cat.id} className="block md:grid md:grid-cols-12 md:gap-4 items-center hover:bg-slate-50 p-2 rounded-lg transition-colors group">
-                <div className="md:col-span-5 mb-2 md:mb-0">
-                  {isEditing ? (
-                      <div className="flex items-center gap-2">
-                          <input autoFocus type="text" value={editingName} onChange={(e) => setEditingName(e.target.value)} className="w-full text-sm border border-indigo-300 rounded px-1 py-0.5 outline-none focus:ring-1 focus:ring-indigo-500" onKeyDown={(e) => e.key === 'Enter' && saveEditing()} />
-                          <button onClick={saveEditing} className="text-emerald-600 hover:bg-emerald-50 p-1 rounded"><Check size={14}/></button>
-                          <button onClick={() => setEditingCatId(null)} className="text-slate-400 hover:bg-slate-100 p-1 rounded"><X size={14}/></button>
-                      </div>
-                  ) : (
-                      <div className="group/name flex items-center justify-between">
-                          <div>
-                            <p className="font-medium text-slate-700 text-sm cursor-pointer" onClick={() => startEditing(cat)}>{cat.name}</p>
-                            {budget > 0 && (
-                                <div className="flex items-center gap-1 mt-0.5">
-                                    <span className={`text-[10px] ${isOverBudget ? 'text-red-500 font-semibold' : 'text-slate-400'}`}>Budget: {budget}</span>
-                                    {isOverBudget && <AlertCircle size={10} className="text-red-500" />}
-                                </div>
-                            )}
-                          </div>
-                          {!isSavingsSection && <button onClick={() => startEditing(cat)} className="opacity-0 group-hover/name:opacity-100 text-slate-300 hover:text-indigo-500 transition-opacity"><Edit2 size={12} /></button>}
-                      </div>
-                  )}
-                </div>
-                
-                <div className="md:col-span-7">
-                    <div className="grid grid-cols-3 gap-2">
-                        <div>{showShared && <MoneyInput value={sharedVal} onChange={(val) => onUpdateEntry(cat.id, 'SHARED', val, activeTripId)} onDescriptionChange={(d) => onUpdateEntry(cat.id, 'SHARED', sharedVal, activeTripId, d)} description={getDescription(cat.id, 'SHARED')} color={users.shared?.color || '#a855f7'} currency={currency}/>}</div>
-                        <div>{showU1 && <MoneyInput value={u1Val} onChange={(val) => onUpdateEntry(cat.id, 'USER_1', val, activeTripId)} onDescriptionChange={(d) => onUpdateEntry(cat.id, 'USER_1', u1Val, activeTripId, d)} description={getDescription(cat.id, 'USER_1')} color={users.user_1.color} currency={currency}/>}</div>
-                        <div>{showU2 && <MoneyInput value={u2Val} onChange={(val) => onUpdateEntry(cat.id, 'USER_2', val, activeTripId)} onDescriptionChange={(d) => onUpdateEntry(cat.id, 'USER_2', u2Val, activeTripId, d)} description={getDescription(cat.id, 'USER_2')} color={users.user_2.color} currency={currency}/>}</div>
+                return (
+                <div key={cat.id} className="block md:grid md:grid-cols-12 md:gap-4 items-center hover:bg-slate-50 p-2 rounded-lg transition-colors group">
+                    <div className="md:col-span-5 mb-2 md:mb-0">
+                    {isEditing ? (
+                        <div className="flex items-center gap-2">
+                            <input autoFocus type="text" value={editingName} onChange={(e) => setEditingName(e.target.value)} className={getInputClass()} onKeyDown={(e) => e.key === 'Enter' && saveEditing()} />
+                            <button onClick={saveEditing} className="text-emerald-600 hover:bg-emerald-50 p-1 rounded"><Check size={14}/></button>
+                            <button onClick={() => setEditingCatId(null)} className="text-slate-400 hover:bg-slate-100 p-1 rounded"><X size={14}/></button>
+                        </div>
+                    ) : (
+                        <div className="group/name flex items-center justify-between">
+                            <div>
+                                <p className="font-medium text-slate-700 text-sm cursor-pointer" onClick={() => startEditing(cat)}>{cat.name}</p>
+                                {budget > 0 && (
+                                    <div className="flex items-center gap-1 mt-0.5">
+                                        <span className={`text-[10px] ${isOverBudget ? 'text-red-500 font-semibold' : 'text-slate-400'}`}>Budget: {budget}</span>
+                                        {isOverBudget && <AlertCircle size={10} className="text-red-500" />}
+                                    </div>
+                                )}
+                            </div>
+                            {!isSavingsSection && <button onClick={() => startEditing(cat)} className="opacity-0 group-hover/name:opacity-100 text-slate-300 hover:text-indigo-500 transition-opacity"><Edit2 size={12} /></button>}
+                        </div>
+                    )}
+                    </div>
+                    
+                    <div className="md:col-span-7">
+                        <div className="grid grid-cols-3 gap-2">
+                            <div>{showShared && <MoneyInput value={sharedVal} onChange={(val) => onUpdateEntry(cat.id, 'SHARED', val, activeTripId)} onDescriptionChange={(d) => onUpdateEntry(cat.id, 'SHARED', sharedVal, activeTripId, d)} description={getDescription(cat.id, 'SHARED')} color={users.shared?.color || '#a855f7'} currency={currency} getInputClass={getInputClass}/>}</div>
+                            <div>{showU1 && <MoneyInput value={u1Val} onChange={(val) => onUpdateEntry(cat.id, 'USER_1', val, activeTripId)} onDescriptionChange={(d) => onUpdateEntry(cat.id, 'USER_1', u1Val, activeTripId, d)} description={getDescription(cat.id, 'USER_1')} color={users.user_1.color} currency={currency} getInputClass={getInputClass}/>}</div>
+                            <div>{showU2 && <MoneyInput value={u2Val} onChange={(val) => onUpdateEntry(cat.id, 'USER_2', val, activeTripId)} onDescriptionChange={(d) => onUpdateEntry(cat.id, 'USER_2', u2Val, activeTripId, d)} description={getDescription(cat.id, 'USER_2')} color={users.user_2.color} currency={currency} getInputClass={getInputClass}/>}</div>
+                        </div>
                     </div>
                 </div>
-              </div>
-            );
-        })}
-      </div>
+                );
+            })}
+        </div>
+        </>
+      )}
     </div>
     );
   };
@@ -251,11 +271,11 @@ export const MonthlyWorksheet: React.FC<MonthlyWorksheetProps> = ({ entries, bud
                  <form onSubmit={handleAddSubmit} className="flex flex-col md:flex-row gap-2 items-stretch md:items-end">
                      <div className="flex-1">
                          <label className="block text-xs font-medium text-slate-500 mb-1">Category Name</label>
-                         <input autoFocus type="text" value={newCatName} onChange={e => setNewCatName(e.target.value)} className="w-full border border-slate-300 rounded-lg p-2 text-sm focus:ring-2 focus:ring-indigo-200 outline-none" placeholder="e.g. Pet Care" />
+                         <input autoFocus type="text" value={newCatName} onChange={e => setNewCatName(e.target.value)} className={getInputClass()} placeholder="e.g. Pet Care" />
                      </div>
                      <div className="w-full md:w-36">
                          <label className="block text-xs font-medium text-slate-500 mb-1">Group</label>
-                         <select value={newCatGroup} onChange={e => setNewCatGroup(e.target.value)} className="w-full border border-slate-300 rounded-lg p-2 text-sm h-full">
+                         <select value={newCatGroup} onChange={e => setNewCatGroup(e.target.value)} className={getInputClass(false) + " h-full"}>
                              <option value="FIXED">Fixed</option>
                              <option value="VARIABLE">Variable</option>
                              <option value="LIFESTYLE">Lifestyle</option>
@@ -264,7 +284,7 @@ export const MonthlyWorksheet: React.FC<MonthlyWorksheetProps> = ({ entries, bud
                      </div>
                      <div className="w-full md:w-36">
                          <label className="block text-xs font-medium text-slate-500 mb-1">Default</label>
-                         <select value={newCatAccount} onChange={e => setNewCatAccount(e.target.value as AccountType)} className="w-full border border-slate-300 rounded-lg p-2 text-sm h-full">
+                         <select value={newCatAccount} onChange={e => setNewCatAccount(e.target.value as AccountType)} className={getInputClass(false) + " h-full"}>
                              <option value="SHARED">Shared</option>
                              <option value="USER_1">User 1</option>
                              <option value="USER_2">User 2</option>

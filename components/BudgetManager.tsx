@@ -11,11 +11,12 @@ interface BudgetManagerProps {
   totalIncome: number;
   users: Record<string, User>;
   currency: CurrencyCode;
+  getInputClass: (isInput?: boolean) => string;
   onAddBudget: (categoryId: string, limit: number, account: AccountType) => void;
   onAddGoal: (name: string, target: number, targetType: 'FIXED'|'PERCENTAGE', initial: number, account: AccountType, startDate?: string, targetDate?: string) => void;
 }
 
-export const BudgetManager: React.FC<BudgetManagerProps> = ({ budgets, categories, savings, entries, totalIncome, users, currency, onAddBudget, onAddGoal }) => {
+export const BudgetManager: React.FC<BudgetManagerProps> = ({ budgets, categories, savings, entries, totalIncome, users, currency, getInputClass, onAddBudget, onAddGoal }) => {
   const [activeTab, setActiveTab] = useState<'BUDGETS' | 'GOALS'>('BUDGETS');
   const [isAdding, setIsAdding] = useState(false);
   
@@ -193,7 +194,7 @@ export const BudgetManager: React.FC<BudgetManagerProps> = ({ budgets, categorie
                     <select 
                         value={selectedYear} 
                         onChange={e => setSelectedYear(e.target.value)}
-                        className="bg-white border border-slate-300 rounded-lg p-2 text-sm focus:ring-2 focus:ring-indigo-200 outline-none text-slate-700"
+                        className={getInputClass(false)}
                     >
                         {availableYears.map(year => <option key={year} value={year}>{year}</option>)}
                     </select>
@@ -221,14 +222,14 @@ export const BudgetManager: React.FC<BudgetManagerProps> = ({ budgets, categorie
                         </div>
                         <div>
                             <label className="block text-xs font-semibold text-slate-500 mb-1">Category</label>
-                            <select value={selectedCatId} onChange={e => setSelectedCatId(e.target.value)} className="w-full text-sm border border-slate-300 rounded-lg p-2.5 outline-none" required>
+                            <select value={selectedCatId} onChange={e => setSelectedCatId(e.target.value)} className={getInputClass(false)} required>
                                 <option value="">Select category...</option>
                                 {availableCategories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                             </select>
                         </div>
                         <div>
                              <label className="block text-xs font-semibold text-slate-500 mb-1">Monthly Limit</label>
-                             <input type="number" value={limit} onChange={e => setLimit(e.target.value)} className="w-full text-sm border border-slate-300 rounded-lg p-2.5 outline-none" placeholder="0.00" required />
+                             <input type="number" value={limit} onChange={e => setLimit(e.target.value)} className={getInputClass()} placeholder="0.00" required />
                         </div>
                         <button type="submit" className="col-span-1 md:col-span-2 w-full bg-slate-900 text-white text-sm font-medium py-3 rounded-lg hover:bg-slate-800 transition">Save Budget</button>
                      </form>
@@ -244,7 +245,7 @@ export const BudgetManager: React.FC<BudgetManagerProps> = ({ budgets, categorie
                         </div>
                         <div className="col-span-1 md:col-span-2">
                              <label className="block text-xs font-semibold text-slate-500 mb-1">Goal Name</label>
-                             <input type="text" value={goalName} onChange={e => setGoalName(e.target.value)} className="w-full text-sm border border-slate-300 rounded-lg p-2.5 outline-none" placeholder="e.g. New Car Fund" required />
+                             <input type="text" value={goalName} onChange={e => setGoalName(e.target.value)} className={getInputClass()} placeholder="e.g. New Car Fund" required />
                         </div>
                         
                         <div>
