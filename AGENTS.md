@@ -204,6 +204,7 @@ FairShare/
 3. **API Layer:** All fetch calls abstracted in `services/storage.ts`
 4. **Styling:** Tailwind utility classes only (no CSS files)
 5. **Components:** Functional with hooks (except ErrorBoundary class)
+6. **Theme Handling:** Components requiring theme awareness (e.g., for conditional styling of un-themed elements like browser inputs) should accept a `theme` prop ('light' | 'dark') passed from `App.tsx`.
 
 ## Common Tasks
 

@@ -8,11 +8,12 @@ interface SingleEntryFormProps {
   currentMonth: string;
   users: Record<string, User>;
   currency: CurrencyCode;
+  theme?: 'light' | 'dark';
   getInputClass: (isInput?: boolean) => string;
   onAddEntry: (entry: Omit<ExpenseEntry, 'id'>) => void;
 }
 
-export const SingleEntryForm: React.FC<SingleEntryFormProps> = ({ categories, trips, currentMonth, users, currency, getInputClass, onAddEntry }) => {
+export const SingleEntryForm: React.FC<SingleEntryFormProps> = ({ categories, trips, currentMonth, users, currency, theme = 'light', getInputClass, onAddEntry }) => {
   const [amount, setAmount] = useState('');
   const [description, setDescription] = useState('');
   const [categoryId, setCategoryId] = useState(categories[0]?.id || '');
@@ -60,14 +61,18 @@ export const SingleEntryForm: React.FC<SingleEntryFormProps> = ({ categories, tr
     }
   };
 
+  const containerClass = theme === 'dark' ? 'bg-slate-900 border-slate-700' : 'bg-white border-slate-200';
+  const titleClass = theme === 'dark' ? 'text-white' : 'text-slate-800';
+  const labelClass = theme === 'dark' ? 'text-slate-400' : 'text-slate-500';
+
   return (
-    <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-4 sm:p-6">
-       <h2 className="font-semibold text-slate-800 mb-6">Add Expense</h2>
+    <div className={`rounded-xl shadow-sm border p-4 sm:p-6 ${containerClass}`}>
+       <h2 className={`font-semibold mb-6 ${titleClass}`}>Add Expense</h2>
        <form onSubmit={handleSubmit} className="space-y-4">
            
            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                <div>
-                   <label className="block text-sm font-medium text-slate-500 mb-1">Amount</label>
+                   <label className={`block text-sm font-medium mb-1 ${labelClass}`}>Amount</label>
                    <div className="relative">
                         <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 font-medium z-10 pointer-events-none">{symbol}</span>
                         <input 
@@ -83,7 +88,7 @@ export const SingleEntryForm: React.FC<SingleEntryFormProps> = ({ categories, tr
                    </div>
                </div>
                <div>
-                   <label className="block text-sm font-medium text-slate-500 mb-1">Date</label>
+                   <label className={`block text-sm font-medium mb-1 ${labelClass}`}>Date</label>
                    <div className="relative">
                        <Calendar size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
                        <input 
@@ -97,7 +102,7 @@ export const SingleEntryForm: React.FC<SingleEntryFormProps> = ({ categories, tr
            </div>
 
            <div>
-               <label className="block text-sm font-medium text-slate-500 mb-1">Description</label>
+               <label className={`block text-sm font-medium mb-1 ${labelClass}`}>Description</label>
                                   <div className="relative">
                                       <FileText size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
                                       <input 
@@ -112,7 +117,7 @@ export const SingleEntryForm: React.FC<SingleEntryFormProps> = ({ categories, tr
 
            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                <div>
-                   <label className="block text-sm font-medium text-slate-500 mb-1">Category</label>
+                   <label className={`block text-sm font-medium mb-1 ${labelClass}`}>Category</label>
                    <select 
                        value={categoryId} 
                        onChange={e => setCategoryId(e.target.value)}
@@ -136,7 +141,7 @@ export const SingleEntryForm: React.FC<SingleEntryFormProps> = ({ categories, tr
                    </select>
                </div>
                <div>
-                   <label className="block text-sm font-medium text-slate-500 mb-1">Account</label>
+                   <label className={`block text-sm font-medium mb-1 ${labelClass}`}>Account</label>
                    <div className="flex items-center gap-2">
                        {activeAvatar ? <img src={activeAvatar} className="w-10 h-10 rounded-full object-cover border border-slate-200 shadow-sm" alt="Account" /> : <div className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center text-slate-400 font-bold text-xs">{account === 'SHARED' ? 'S' : account === 'USER_1' ? '1' : '2'}</div>}
                        <select 

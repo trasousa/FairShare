@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Category, ExpenseEntry, AccountType, Budget, Trip, CurrencyCode, SavingsGoal, User } from '../types';
-import { AlertCircle, Plus, Edit2, Check, X, Plane, TrendingUp, MessageSquare } from 'lucide-react';
+import { AlertCircle, Plus, Edit2, Check, X, Plane, TrendingUp, MessageSquare, Trash2 } from 'lucide-react';
 
 interface MonthlyWorksheetProps {
   entries: ExpenseEntry[];
@@ -15,6 +15,7 @@ interface MonthlyWorksheetProps {
   onUpdateEntry: (categoryId: string, account: AccountType, amount: number, tripId?: string, description?: string) => void;
   onAddCategory: (name: string, group: string, account: AccountType) => void;
   onEditCategory: (id: string, newName: string) => void;
+  onDeleteCategory: (id: string) => void;
   onDateClick: () => void;
 }
 
@@ -97,7 +98,7 @@ const MoneyInput = ({ value, onChange, onDescriptionChange, description, color, 
   );
 };
 
-export const MonthlyWorksheet: React.FC<MonthlyWorksheetProps> = ({ entries, budgets, categories, savings = [], users, trips, monthId, currency, getInputClass, onUpdateEntry, onAddCategory, onEditCategory, onDateClick }) => {
+export const MonthlyWorksheet: React.FC<MonthlyWorksheetProps> = ({ entries, budgets, categories, savings = [], users, trips, monthId, currency, getInputClass, onUpdateEntry, onAddCategory, onEditCategory, onDeleteCategory, onDateClick }) => {
   const [isAddingCat, setIsAddingCat] = useState(false);
   const [newCatName, setNewCatName] = useState('');
   const [newCatGroup, setNewCatGroup] = useState('VARIABLE');
@@ -213,7 +214,12 @@ export const MonthlyWorksheet: React.FC<MonthlyWorksheetProps> = ({ entries, bud
                                     </div>
                                 )}
                             </div>
-                            {!isSavingsSection && <button onClick={() => startEditing(cat)} className="opacity-0 group-hover/name:opacity-100 text-slate-300 hover:text-indigo-500 transition-opacity"><Edit2 size={12} /></button>}
+                            {!isSavingsSection && (
+                                <div className="flex items-center gap-1 opacity-0 group-hover/name:opacity-100 transition-opacity">
+                                    <button onClick={() => startEditing(cat)} className="text-slate-300 hover:text-indigo-500 p-1"><Edit2 size={12} /></button>
+                                    <button onClick={() => { if(confirm('Delete category?')) onDeleteCategory(cat.id); }} className="text-slate-300 hover:text-red-500 p-1"><Trash2 size={12} /></button>
+                                </div>
+                            )}
                         </div>
                     )}
                     </div>

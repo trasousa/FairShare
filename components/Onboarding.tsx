@@ -38,6 +38,7 @@ export const Onboarding: React.FC<OnboardingProps> = ({ onComplete, onCancel }) 
     const [categories, setCategories] = useState<Category[]>(DEFAULT_CATEGORIES.map(c => ({ ...c, id: generateId() })));
     const [newCatName, setNewCatName] = useState('');
     const [newCatGroup, setNewCatGroup] = useState<'FIXED' | 'VARIABLE' | 'LIFESTYLE'>('VARIABLE');
+    const [newCatAccounts, setNewCatAccounts] = useState({ SHARED: true, USER_1: false, USER_2: false });
 
     const handleUpdateCategoryAccount = (id: string, account: AccountType) => {
         setCategories(cats => cats.map(c => c.id === id ? { ...c, defaultAccount: account } : c));
@@ -46,7 +47,16 @@ export const Onboarding: React.FC<OnboardingProps> = ({ onComplete, onCancel }) 
     const handleAddCategory = (e: React.FormEvent) => {
         e.preventDefault();
         if (newCatName.trim()) {
-            setCategories(cats => [...cats, { id: generateId(), name: newCatName.trim(), group: newCatGroup, defaultAccount: 'SHARED' }]);
+            const newCats: Category[] = [];
+            if (newCatAccounts.SHARED) newCats.push({ id: generateId(), name: newCatName.trim(), group: newCatGroup, defaultAccount: 'SHARED' });
+            if (newCatAccounts.USER_1) newCats.push({ id: generateId(), name: newCatName.trim(), group: newCatGroup, defaultAccount: 'USER_1' });
+            if (newCatAccounts.USER_2) newCats.push({ id: generateId(), name: newCatName.trim(), group: newCatGroup, defaultAccount: 'USER_2' });
+            
+            if (newCats.length === 0) {
+                 newCats.push({ id: generateId(), name: newCatName.trim(), group: newCatGroup, defaultAccount: 'SHARED' });
+            }
+
+            setCategories(cats => [...cats, ...newCats]);
             setNewCatName('');
         }
     };
@@ -127,19 +137,29 @@ export const Onboarding: React.FC<OnboardingProps> = ({ onComplete, onCancel }) 
                     </div>
                 ))}
             </div>
-            <form onSubmit={handleAddCategory} className="grid grid-cols-12 gap-2 items-center mt-4 pt-4 border-t">
-                <div className="col-span-4">
+            <form onSubmit={handleAddCategory} className="grid grid-cols-12 gap-2 items-start mt-4 pt-4 border-t">
+                <div className="col-span-4 space-y-2">
                     <input type="text" value={newCatName} onChange={e => setNewCatName(e.target.value)} placeholder="New Category" className="w-full text-sm border p-2 rounded-lg" />
-                </div>
-                <div className="col-span-4">
                      <select value={newCatGroup} onChange={e => setNewCatGroup(e.target.value as any)} className="w-full text-sm border p-2 rounded-lg bg-white">
                         <option value="VARIABLE">Variable Expense</option>
                         <option value="FIXED">Fixed Expense</option>
                         <option value="LIFESTYLE">Lifestyle</option>
                      </select>
                 </div>
-                <div className="col-span-4">
-                    <button type="submit" className="w-full flex items-center justify-center gap-2 bg-indigo-50 text-indigo-600 p-2 rounded-lg text-sm font-medium hover:bg-indigo-100"><Plus size={16}/> Add</button>
+                <div className="col-span-8 flex flex-wrap gap-2 items-center">
+                     <label className={`flex-1 flex items-center justify-center gap-1 p-2 border rounded-lg cursor-pointer transition text-xs font-bold ${newCatAccounts.SHARED ? 'bg-purple-50 border-purple-200 text-purple-700' : 'bg-white border-slate-200 text-slate-400'}`}>
+                        <input type="checkbox" className="hidden" checked={newCatAccounts.SHARED} onChange={e => setNewCatAccounts(p => ({...p, SHARED: e.target.checked}))} />
+                        Shared
+                     </label>
+                     <label className={`flex-1 flex items-center justify-center gap-1 p-2 border rounded-lg cursor-pointer transition text-xs font-bold ${newCatAccounts.USER_1 ? 'bg-blue-50 border-blue-200 text-blue-700' : 'bg-white border-slate-200 text-slate-400'}`}>
+                        <input type="checkbox" className="hidden" checked={newCatAccounts.USER_1} onChange={e => setNewCatAccounts(p => ({...p, USER_1: e.target.checked}))} />
+                        {u1Name}
+                     </label>
+                     <label className={`flex-1 flex items-center justify-center gap-1 p-2 border rounded-lg cursor-pointer transition text-xs font-bold ${newCatAccounts.USER_2 ? 'bg-pink-50 border-pink-200 text-pink-700' : 'bg-white border-slate-200 text-slate-400'}`}>
+                        <input type="checkbox" className="hidden" checked={newCatAccounts.USER_2} onChange={e => setNewCatAccounts(p => ({...p, USER_2: e.target.checked}))} />
+                        {u2Name}
+                     </label>
+                     <button type="submit" className="w-full flex items-center justify-center gap-2 bg-indigo-50 text-indigo-600 p-2 rounded-lg text-sm font-medium hover:bg-indigo-100 mt-1"><Plus size={16}/> Add Category</button>
                 </div>
             </form>
             <div className="flex justify-between pt-6 mt-6 border-t">

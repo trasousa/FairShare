@@ -49,35 +49,21 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ instanceName, users,
     setTimeout(() => setSuccessMsg(''), 3000);
   };
 
-  const AVATAR_OPTIONS = {
-    People: [
-        'https://api.dicebear.com/7.x/personas/svg?seed=Felix',
-        'https://api.dicebear.com/7.x/personas/svg?seed=Aneka',
-        'https://api.dicebear.com/7.x/personas/svg?seed=Jasper',
-        'https://api.dicebear.com/7.x/personas/svg?seed=Milo',
-        'https://api.dicebear.com/7.x/personas/svg?seed=Luna'
-    ],
-    Animals: [
-        'https://api.dicebear.com/7.x/big-ears/svg?seed=Bear',
-        'https://api.dicebear.com/7.x/big-ears/svg?seed=Fox',
-        'https://api.dicebear.com/7.x/big-ears/svg?seed=Owl',
-        'https://api.dicebear.com/7.x/big-ears/svg?seed=Cat',
-        'https://api.dicebear.com/7.x/big-ears/svg?seed=Dog'
-    ],
-    Objects: [
-        'https://api.dicebear.com/7.x/icons/svg?seed=Ball',
-        'https://api.dicebear.com/7.x/icons/svg?seed=Flower',
-        'https://api.dicebear.com/7.x/icons/svg?seed=Plant',
-        'https://api.dicebear.com/7.x/icons/svg?seed=Sun',
-        'https://api.dicebear.com/7.x/icons/svg?seed=Book'
-    ],
-    Abstract: [
-        'https://api.dicebear.com/7.x/abstract/svg?seed=One',
-        'https://api.dicebear.com/7.x/abstract/svg?seed=Two',
-        'https://api.dicebear.com/7.x/abstract/svg?seed=Three',
-        'https://api.dicebear.com/7.x/abstract/svg?seed=Four',
-        'https://api.dicebear.com/7.x/abstract/svg?seed=Five'
-    ]
+  const AVATAR_OPTIONS = [
+    'https://api.dicebear.com/7.x/icons/svg?seed=Heart',
+    'https://api.dicebear.com/7.x/icons/svg?seed=Sun',
+    'https://api.dicebear.com/7.x/icons/svg?seed=Bike',
+    'https://api.dicebear.com/7.x/big-ears/svg?seed=Dog'
+  ];
+
+  const handleFileUpload = (id: UserId, file: File) => {
+      if (file) {
+          const reader = new FileReader();
+          reader.onloadend = () => {
+              handleChange(id, 'avatar', reader.result as string);
+          };
+          reader.readAsDataURL(file);
+      }
   };
 
   const renderAvatarPicker = (id: UserId, currentAvatar: string) => {
@@ -111,25 +97,28 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ instanceName, users,
             {isOpen && (
                 <div className="bg-slate-50 rounded-2xl p-4 border border-slate-100 animate-in slide-in-from-top-2 duration-200">
                     <div className="space-y-4">
-                        {Object.entries(AVATAR_OPTIONS).map(([category, options]) => (
-                            <div key={category}>
-                                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">{category}</p>
-                                <div className="grid grid-cols-5 gap-2">
-                                    {options.map((url) => (
-                                        <button 
-                                            key={url}
-                                            onClick={() => {
-                                                handleChange(id, 'avatar', url);
-                                                setActivePicker(null);
-                                            }}
-                                            className={`aspect-square rounded-xl border-2 transition overflow-hidden bg-white shadow-sm hover:scale-105 ${currentAvatar === url ? 'border-indigo-500 ring-2 ring-indigo-100' : 'border-transparent'}`}
-                                        >
-                                            <img src={url} className="w-full h-full object-cover" />
-                                        </button>
-                                    ))}
-                                </div>
+                        <div>
+                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">Choose Icon</p>
+                            <div className="grid grid-cols-5 gap-2">
+                                {AVATAR_OPTIONS.map((url) => (
+                                    <button 
+                                        key={url}
+                                        onClick={() => {
+                                            handleChange(id, 'avatar', url);
+                                            setActivePicker(null);
+                                        }}
+                                        className={`aspect-square rounded-xl border-2 transition overflow-hidden bg-white shadow-sm hover:scale-105 ${currentAvatar === url ? 'border-indigo-500 ring-2 ring-indigo-100' : 'border-transparent'}`}
+                                    >
+                                        <img src={url} className="w-full h-full object-cover" />
+                                    </button>
+                                ))}
+                                <label className="aspect-square rounded-xl border-2 border-dashed border-slate-300 flex flex-col items-center justify-center gap-1 cursor-pointer hover:bg-slate-100 transition bg-white text-slate-400 hover:text-slate-600">
+                                    <Upload size={20} />
+                                    <span className="text-[8px] font-bold uppercase">Upload</span>
+                                    <input type="file" className="hidden" accept="image/*" onChange={(e) => e.target.files?.[0] && handleFileUpload(id, e.target.files[0])} />
+                                </label>
                             </div>
-                        ))}
+                        </div>
                     </div>
                 </div>
             )}

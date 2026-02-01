@@ -410,11 +410,12 @@ function App({ instanceId, onExit }: AppProps) {
                           }}
                           onAddCategory={(n, g, a) => setCategories(p => [...p, {id: n.toLowerCase().replace(/\s+/g, '_') + '_' + Math.random().toString(36).substr(2, 4), name: n, group: g as any, defaultAccount: a}])}
                           onEditCategory={(id, n) => setCategories(p => p.map(c => c.id === id ? { ...c, name: n } : c))}
+                          onDeleteCategory={(id) => setCategories(p => p.filter(c => c.id !== id))}
                           onDateClick={() => setIsMonthPickerOpen(true)}
                         />
                     )}
                     {activeRegisterView === 'single' && (
-                        <div className="max-w-xl mx-auto"><SingleEntryForm categories={categories} trips={trips} currentMonth={currentMonth} users={users} currency={currency} getInputClass={getInputClass} onAddEntry={(e) => setEntries(p => [...p, { ...e, id: Math.random().toString(36) }])} /></div>
+                        <div className="max-w-xl mx-auto"><SingleEntryForm categories={categories} trips={trips} currentMonth={currentMonth} users={users} currency={currency} theme={theme} getInputClass={getInputClass} onAddEntry={(e) => setEntries(p => [...p, { ...e, id: Math.random().toString(36) }])} /></div>
                     )}
                     {activeRegisterView === 'income' && (
                         <IncomeManager incomes={incomes} currentMonth={currentMonth} users={users} currency={currency} onAddIncome={(s, a, r, ir, mid) => setIncomes(p => [...p, {id: Math.random().toString(36), monthId: mid, source: s, amount: a, recipient: r, isRecurring: ir}])} onDeleteIncome={(id) => setIncomes(p => p.filter(i => i.id !== id))} />
