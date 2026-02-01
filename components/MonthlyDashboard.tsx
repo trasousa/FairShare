@@ -43,7 +43,7 @@ export const MonthlyDashboard: React.FC<MonthlyDashboardProps> = ({ entries, bud
   
   const spendingEntries = monthlyEntries.filter(e => {
       const cat = categories.find(c => c.id === e.categoryId);
-      return cat?.group !== 'SAVINGS';
+      return !cat || cat.group !== 'SAVINGS';
   });
 
   const savingsEntries = monthlyEntries.filter(e => {
@@ -64,10 +64,16 @@ export const MonthlyDashboard: React.FC<MonthlyDashboardProps> = ({ entries, bud
   const monthlySavingsTotal = savingsEntries.reduce((sum, e) => sum + e.amount, 0);
 
   const monthlySavingsTarget = savings.reduce((sum, goal) => {
+      let target = 0;
       if (goal.targetType === 'FIXED') {
+          // Fixed savings goals are handled via contributions, no simple monthly target for now
           return sum; 
       } else {
-          return sum + (totalIncome * (goal.targetAmount / 100));
+          const baseIncome = goal.projectionPeriod === 'ANNUAL' ? totalIncome * 12 : totalIncome;
+          target = baseIncome * (goal.targetAmount / 100);
+          // If annual, divide by 12 to get monthly requirement
+          if (goal.projectionPeriod === 'ANNUAL') target /= 12;
+          return sum + target;
       }
   }, 0);
   
@@ -106,19 +112,30 @@ export const MonthlyDashboard: React.FC<MonthlyDashboardProps> = ({ entries, bud
 
     const groups: Record<string, any> = {};
     
-    categories.forEach(cat => {
-        const entriesForCat = filteredEntries.filter(e => e.categoryId === cat.id);
-        if (entriesForCat.length === 0) return;
+    // Create a map of categories grouped by name + group
+    const uniqueCategoryGroups: Record<string, { name: string, group: string, ids: string[] }> = {};
+    categories.forEach(c => {
+        const key = `${c.name}|${c.group}`;
+        if (!uniqueCategoryGroups[key]) {
+            uniqueCategoryGroups[key] = { name: c.name, group: c.group, ids: [] };
+        }
+        uniqueCategoryGroups[key].ids.push(c.id);
+    });
+
+    Object.values(uniqueCategoryGroups).forEach(uCat => {
+        const entriesForCat = filteredEntries.filter(e => uCat.ids.includes(e.categoryId));
+        const budget = budgets.filter(b => uCat.ids.includes(b.categoryId)).reduce((sum, b) => sum + b.limit, 0);
+        
+        if (entriesForCat.length === 0 && budget === 0) return;
 
         const spentByUser1 = entriesForCat.filter(e => e.account === 'USER_1').reduce((sum, e) => sum + e.amount, 0);
         const spentByUser2 = entriesForCat.filter(e => e.account === 'USER_2').reduce((sum, e) => sum + e.amount, 0);
         const spentShared = entriesForCat.filter(e => e.account === 'SHARED').reduce((sum, e) => sum + e.amount, 0);
         const totalSpent = spentByUser1 + spentByUser2 + spentShared;
-        const budget = budgets.find(b => b.categoryId === cat.id)?.limit || 0;
 
-        if (!groups[cat.group]) {
-            groups[cat.group] = {
-                name: cat.group,
+        if (!groups[uCat.group]) {
+            groups[uCat.group] = {
+                name: uCat.group,
                 spentByUser1: 0,
                 spentByUser2: 0,
                 spentShared: 0,
@@ -128,13 +145,14 @@ export const MonthlyDashboard: React.FC<MonthlyDashboardProps> = ({ entries, bud
             };
         }
 
-        groups[cat.group].spentByUser1 += spentByUser1;
-        groups[cat.group].spentByUser2 += spentByUser2;
-        groups[cat.group].spentShared += spentShared;
-        groups[cat.group].totalSpent += totalSpent;
-        groups[cat.group].totalBudget += budget;
-        groups[cat.group].items.push({
-            cat,
+        groups[uCat.group].spentByUser1 += spentByUser1;
+        groups[uCat.group].spentByUser2 += spentByUser2;
+        groups[uCat.group].spentShared += spentShared;
+        groups[uCat.group].totalSpent += totalSpent;
+        groups[uCat.group].totalBudget += budget;
+        groups[uCat.group].items.push({
+            name: uCat.name,
+            ids: uCat.ids,
             spentByUser1,
             spentByUser2,
             spentShared,
@@ -142,6 +160,24 @@ export const MonthlyDashboard: React.FC<MonthlyDashboardProps> = ({ entries, bud
             budget
         });
     });
+
+    // Handle Uncategorized
+    const knownCatIds = categories.map(c => c.id);
+    const uncategorizedEntries = filteredEntries.filter(e => !knownCatIds.includes(e.categoryId));
+    if (uncategorizedEntries.length > 0) {
+        const uGroup = 'OTHER';
+        if (!groups[uGroup]) {
+            groups[uGroup] = { name: uGroup, spentByUser1: 0, spentByUser2: 0, spentShared: 0, totalSpent: 0, totalBudget: 0, items: [] };
+        }
+        const s1 = uncategorizedEntries.filter(e => e.account === 'USER_1').reduce((sum, e) => sum + e.amount, 0);
+        const s2 = uncategorizedEntries.filter(e => e.account === 'USER_2').reduce((sum, e) => sum + e.amount, 0);
+        const ss = uncategorizedEntries.filter(e => e.account === 'SHARED').reduce((sum, e) => sum + e.amount, 0);
+        groups[uGroup].spentByUser1 += s1;
+        groups[uGroup].spentByUser2 += s2;
+        groups[uGroup].spentShared += ss;
+        groups[uGroup].totalSpent += (s1 + s2 + ss);
+        groups[uGroup].items.push({ name: 'Uncategorized', ids: [], spentByUser1: s1, spentByUser2: s2, spentShared: ss, totalSpent: s1+s2+ss, budget: 0 });
+    }
 
     return Object.values(groups).sort((a, b) => b.totalSpent - a.totalSpent);
   }, [categories, monthlyEntries, filterAccount, budgets]);
@@ -527,15 +563,15 @@ export const MonthlyDashboard: React.FC<MonthlyDashboardProps> = ({ entries, bud
                                             </td>
                                         </tr>
                                         {isGroupExpanded && group.items.map((item: any) => {
-                                            const isCatExpanded = expandedCatId === item.cat.id;
+                                            const isCatExpanded = expandedCatId === item.name; // Use name as unique key for expansion within group
                                             const isOver = item.budget > 0 && item.totalSpent > item.budget;
                                             
                                             return (
-                                                <React.Fragment key={item.cat.id}>
-                                                    <tr onClick={(e) => { e.stopPropagation(); toggleCat(item.cat.id); }} className={`cursor-pointer transition border-l-4 ${isCatExpanded ? 'bg-white border-indigo-400' : 'hover:bg-slate-50/50 border-transparent'}`}>
+                                                <React.Fragment key={item.name}>
+                                                    <tr onClick={(e) => { e.stopPropagation(); toggleCat(item.name); }} className={`cursor-pointer transition border-l-4 ${isCatExpanded ? 'bg-white border-indigo-400' : 'hover:bg-slate-50/50 border-transparent'}`}>
                                                         <td className="px-10 py-3 font-medium text-slate-600 flex items-center gap-2">
                                                             <div className="w-1.5 h-1.5 rounded-full bg-slate-300"></div>
-                                                            {item.cat.name}
+                                                            {item.name}
                                                         </td>
                                                         <td className="px-6 py-3 text-right text-slate-500 text-xs">{formatCurrency(item.spentByUser1, currency)}</td>
                                                         <td className="px-6 py-3 text-right text-slate-500 text-xs">{formatCurrency(item.spentByUser2, currency)}</td>
@@ -554,7 +590,7 @@ export const MonthlyDashboard: React.FC<MonthlyDashboardProps> = ({ entries, bud
                                                         <tr>
                                                             <td colSpan={7} className="bg-slate-50/80 p-0">
                                                                 <div className="px-14 py-4 space-y-2 border-b border-slate-100">
-                                                                    {monthlyEntries.filter(e => e.categoryId === item.cat.id).sort((a,b) => (b.date||'').localeCompare(a.date||'')).map(entry => (
+                                                                    {monthlyEntries.filter(e => item.ids.includes(e.categoryId) || (item.name === 'Uncategorized' && !knownCatIds.includes(e.categoryId))).sort((a,b) => (b.date||'').localeCompare(a.date||'')).map(entry => (
                                                                         <div key={entry.id} className="flex justify-between items-center text-[11px] text-slate-600 pl-4 border-l-2 border-slate-200">
                                                                             <div className="flex items-center gap-3">
                                                                                 <span className="text-slate-400 font-mono w-16">{entry.date?.split('-').slice(1).join('/') || entry.monthId}</span>

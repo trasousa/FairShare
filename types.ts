@@ -53,6 +53,7 @@ export interface SavingsGoal {
   initialAmount: number; // Starting balance
   targetAmount: number; // If fixed, this is the value. If percentage, this is the % (e.g., 20)
   targetType: 'FIXED' | 'PERCENTAGE';
+  projectionPeriod?: 'MONTHLY' | 'ANNUAL';
   account: AccountType;
   startDate?: string; // Optional start date for the goal
   targetDate?: string; // Optional target completion date
@@ -75,11 +76,18 @@ export interface Trip {
     account?: AccountType;
 }
 
+export interface Suggestion {
+    id: string;
+    text: string;
+    timestamp: number;
+}
+
 export interface AppInstance {
     id: string;
     name: string;
     created: number;
     lastAccessed: number;
+    lastUpdated?: number;
     currency: CurrencyCode;
     theme?: 'light' | 'dark';
     users: Record<string, User>;
@@ -90,5 +98,6 @@ export interface AppInstance {
         savings: SavingsGoal[];
         trips: Trip[];
         incomes: IncomeEntry[];
+        suggestions?: Suggestion[];
     }
 }

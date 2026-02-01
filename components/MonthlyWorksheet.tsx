@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Category, ExpenseEntry, AccountType, Budget, Trip, CurrencyCode, SavingsGoal, User } from '../types';
+import { formatCurrency } from '../services/financeService';
 import { AlertCircle, Plus, Edit2, Check, X, Plane, TrendingUp, MessageSquare, Trash2, GripVertical, Settings2 } from 'lucide-react';
 
 interface MonthlyWorksheetProps {
@@ -25,9 +26,11 @@ import { ChevronDown, ChevronUp } from 'lucide-react';
 const MoneyInput = ({ value, onChange, onDescriptionChange, description, color, currency, readOnly = false, getInputClass }: { value: number; onChange: (val: number) => void; onDescriptionChange: (val: string) => void; description?: string; color: string; currency: CurrencyCode; readOnly?: boolean; getInputClass: (isInput?: boolean) => string; }) => {
   const [localValue, setLocalValue] = useState(value === 0 ? '' : value.toString());
   const [showDesc, setShowDesc] = useState(false);
+  const inputRef = React.useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    if (document.activeElement !== document.querySelector(`[value="${localValue}"]`)) {
+    // Only update localValue from props if the input is not currently focused
+    if (document.activeElement !== inputRef.current) {
       setLocalValue(value === 0 ? '' : value.toString());
     }
   }, [value]);
@@ -50,7 +53,7 @@ const MoneyInput = ({ value, onChange, onDescriptionChange, description, color, 
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
       if (e.key === 'Enter') {
-          (e.target as HTMLInputElement).blur();
+          inputRef.current?.blur();
       }
   };
 
@@ -67,6 +70,7 @@ const MoneyInput = ({ value, onChange, onDescriptionChange, description, color, 
     <div className="relative group/input">
         <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs font-medium pointer-events-none z-10">{symbol}</span>
         <input 
+            ref={inputRef}
             type="text" 
             inputMode="text"
             placeholder="0"
@@ -195,29 +199,45 @@ export const MonthlyWorksheet: React.FC<MonthlyWorksheetProps> = ({ entries, bud
     setDraggedCatId(null);
   };
 
-  const renderCategoryRow = (cat: Category, showShared: boolean, showU1: boolean, showU2: boolean, tripId?: string, isSubRow = false) => {
-    const budget = getBudget(cat.id);
-    const sharedVal = getAmount(cat.id, 'SHARED', tripId);
-    const u1Val = getAmount(cat.id, 'USER_1', tripId);
-    const u2Val = getAmount(cat.id, 'USER_2', tripId);
-    let rowTotal = (showShared ? sharedVal : 0) + (showU1 ? u1Val : 0) + (showU2 ? u2Val : 0);
-    const isOverBudget = !tripId && budget > 0 && rowTotal > budget;
-    const isEditing = editingCatId === cat.id;
+  const renderCategoryRow = (name: string, group: string, catsWithName: Category[], showShared: boolean, showU1: boolean, showU2: boolean, tripId?: string, isSubRow = false) => {
+    const sharedCat = catsWithName.find(c => c.defaultAccount === 'SHARED');
+    const u1Cat = catsWithName.find(c => c.defaultAccount === 'USER_1');
+    const u2Cat = catsWithName.find(c => c.defaultAccount === 'USER_2');
 
-    const isDragging = draggedCatId === cat.id;
+    // For editing/deleting, we use the first available category ID as a reference
+    const primaryCat = catsWithName[0];
+    const budget = sharedCat ? getBudget(sharedCat.id) : (u1Cat ? getBudget(u1Cat.id) : (u2Cat ? getBudget(u2Cat.id) : 0));
+    
+    const sharedVal = sharedCat ? getAmount(sharedCat.id, 'SHARED', tripId) : getAmount(primaryCat?.id, 'SHARED', tripId);
+    const u1Val = u1Cat ? getAmount(u1Cat.id, 'USER_1', tripId) : getAmount(primaryCat?.id, 'USER_1', tripId);
+    const u2Val = u2Cat ? getAmount(u2Cat.id, 'USER_2', tripId) : getAmount(primaryCat?.id, 'USER_2', tripId);
+    
+    let rowTotal = sharedVal + u1Val + u2Val;
+    const isOverBudget = !tripId && budget > 0 && rowTotal > budget;
+    const isEditing = editingCatId === primaryCat?.id;
+
+    const isDragging = draggedCatId === primaryCat?.id;
     const tripName = tripId ? trips.find(t => t.id === tripId)?.name : 'General';
+
+    // A column is visible if:
+    // 1. The section says it should be shown
+    // 2. OR the category exists for that account
+    // 3. OR there is a non-zero amount for that account
+    const isSharedVisible = showShared || !!sharedCat || sharedVal > 0;
+    const isU1Visible = showU1 || !!u1Cat || u1Val > 0;
+    const isU2Visible = showU2 || !!u2Cat || u2Val > 0;
 
     return (
         <div 
-            key={cat.id + (tripId || '')} 
+            key={name + (tripId || '')} 
             className={`block md:grid md:grid-cols-12 md:gap-4 items-center hover:bg-slate-50 p-2 rounded-lg transition-colors group ${isDragging ? 'opacity-50 bg-indigo-100' : ''} ${isSubRow ? 'md:ml-6 border-l-2 border-slate-100' : ''}`}
-            draggable={!isSubRow && isOrganizing && cat.group !== 'SAVINGS'}
-            onDragStart={e => !isSubRow && handleDragStart(e, cat.id)}
+            draggable={!isSubRow && isOrganizing && group !== 'SAVINGS'}
+            onDragStart={e => !isSubRow && primaryCat && handleDragStart(e, primaryCat.id)}
             onDragOver={e => e.preventDefault()}
-            onDrop={e => !isSubRow && handleDrop(e, cat.id)}
+            onDrop={e => !isSubRow && primaryCat && handleDrop(e, primaryCat.id)}
         >
             <div className="md:col-span-5 mb-2 md:mb-0 flex items-center gap-2">
-            {!isSubRow && isOrganizing && cat.group !== 'SAVINGS' && <GripVertical size={16} className="text-slate-300 cursor-grab" />}
+            {!isSubRow && isOrganizing && group !== 'SAVINGS' && <GripVertical size={16} className="text-slate-300 cursor-grab" />}
             {isEditing && !isSubRow ? (
                 <div className="flex items-center gap-2 flex-1">
                     <input autoFocus type="text" value={editingName} onChange={(e) => setEditingName(e.target.value)} className={getInputClass()} onKeyDown={(e) => e.key === 'Enter' && saveEditing()} />
@@ -229,7 +249,7 @@ export const MonthlyWorksheet: React.FC<MonthlyWorksheetProps> = ({ entries, bud
                     <div className="truncate">
                         <p className={`font-medium text-slate-700 text-sm ${isSubRow ? 'text-xs text-slate-500 italic flex items-center gap-1' : ''}`}>
                             {isSubRow && <Plane size={10} />}
-                            {isSubRow ? tripName : cat.name}
+                            {isSubRow ? tripName : name}
                         </p>
                         {!isSubRow && budget > 0 && (
                             <div className="flex items-center gap-1 mt-0.5">
@@ -238,14 +258,14 @@ export const MonthlyWorksheet: React.FC<MonthlyWorksheetProps> = ({ entries, bud
                             </div>
                         )}
                     </div>
-                    {!isSubRow && cat.group !== 'SAVINGS' && !isOrganizing && (
+                    {!isSubRow && group !== 'SAVINGS' && !isOrganizing && primaryCat && (
                         <div className="flex items-center gap-1 opacity-0 group-hover/name:opacity-100 transition-opacity flex-shrink-0">
-                            {cat.group === 'TRAVEL' && (
+                            {group === 'TRAVEL' && (
                                 <div className="relative">
                                     <select 
                                         className="text-[10px] bg-indigo-50 text-indigo-700 border border-indigo-100 rounded px-1 py-0.5 outline-none focus:ring-1 focus:ring-indigo-300"
                                         onChange={(e) => {
-                                            if (e.target.value) onUpdateEntry(cat.id, 'SHARED', 0, e.target.value);
+                                            if (e.target.value) onUpdateEntry(primaryCat.id, 'SHARED', 0, e.target.value);
                                             e.target.value = '';
                                         }}
                                         value=""
@@ -257,8 +277,8 @@ export const MonthlyWorksheet: React.FC<MonthlyWorksheetProps> = ({ entries, bud
                                     </select>
                                 </div>
                             )}
-                            <button onClick={() => startEditing(cat)} className="text-slate-300 hover:text-indigo-500 p-1"><Edit2 size={12} /></button>
-                            <button onClick={() => { if(confirm('Delete category?')) onDeleteCategory(cat.id); }} className="text-slate-300 hover:text-red-500 p-1"><Trash2 size={12} /></button>
+                            <button onClick={() => startEditing(primaryCat)} className="text-slate-300 hover:text-indigo-500 p-1"><Edit2 size={12} /></button>
+                            <button onClick={() => { if(confirm(`Delete category "${name}"?`)) onDeleteCategory(primaryCat.id); }} className="text-slate-300 hover:text-red-500 p-1"><Trash2 size={12} /></button>
                         </div>
                     )}
                 </div>
@@ -267,9 +287,9 @@ export const MonthlyWorksheet: React.FC<MonthlyWorksheetProps> = ({ entries, bud
             
             <div className="md:col-span-7">
                 <div className="grid grid-cols-3 gap-2">
-                    <div>{showShared && <MoneyInput value={sharedVal} onChange={(val) => onUpdateEntry(cat.id, 'SHARED', val, tripId)} onDescriptionChange={(d) => onUpdateEntry(cat.id, 'SHARED', sharedVal, tripId, d)} description={getDescription(cat.id, 'SHARED', tripId)} color={users.shared?.color || '#a855f7'} currency={currency} getInputClass={getInputClass}/>}</div>
-                    <div>{showU1 && <MoneyInput value={u1Val} onChange={(val) => onUpdateEntry(cat.id, 'USER_1', val, tripId)} onDescriptionChange={(d) => onUpdateEntry(cat.id, 'USER_1', u1Val, tripId, d)} description={getDescription(cat.id, 'USER_1', tripId)} color={users.user_1.color} currency={currency} getInputClass={getInputClass}/>}</div>
-                    <div>{showU2 && <MoneyInput value={u2Val} onChange={(val) => onUpdateEntry(cat.id, 'USER_2', val, tripId)} onDescriptionChange={(d) => onUpdateEntry(cat.id, 'USER_2', u2Val, tripId, d)} description={getDescription(cat.id, 'USER_2', tripId)} color={users.user_2.color} currency={currency} getInputClass={getInputClass}/>}</div>
+                    <div>{isSharedVisible && <MoneyInput value={sharedVal} onChange={(val) => onUpdateEntry(sharedCat?.id || primaryCat.id, 'SHARED', val, tripId)} onDescriptionChange={(d) => onUpdateEntry(sharedCat?.id || primaryCat.id, 'SHARED', sharedVal, tripId, d)} description={getDescription(sharedCat?.id || primaryCat.id, 'SHARED', tripId)} color={users.shared?.color || '#a855f7'} currency={currency} getInputClass={getInputClass}/>}</div>
+                    <div>{isU1Visible && <MoneyInput value={u1Val} onChange={(val) => onUpdateEntry(u1Cat?.id || primaryCat.id, 'USER_1', val, tripId)} onDescriptionChange={(d) => onUpdateEntry(u1Cat?.id || primaryCat.id, 'USER_1', u1Val, tripId, d)} description={getDescription(u1Cat?.id || primaryCat.id, 'USER_1', tripId)} color={users.user_1.color} currency={currency} getInputClass={getInputClass}/>}</div>
+                    <div>{isU2Visible && <MoneyInput value={u2Val} onChange={(val) => onUpdateEntry(u2Cat?.id || primaryCat.id, 'USER_2', val, tripId)} onDescriptionChange={(d) => onUpdateEntry(u2Cat?.id || primaryCat.id, 'USER_2', u2Val, tripId, d)} description={getDescription(u2Cat?.id || primaryCat.id, 'USER_2', tripId)} color={users.user_2.color} currency={currency} getInputClass={getInputClass}/>}</div>
                 </div>
             </div>
         </div>
@@ -281,7 +301,25 @@ export const MonthlyWorksheet: React.FC<MonthlyWorksheetProps> = ({ entries, bud
     if (isSavingsSection) sectionCategories = sectionCategories.filter(cat => savings.some(s => s.id === cat.id));
     if (sectionCategories.length === 0) return null;
 
+    // Group categories by name
+    const groupedByName: Record<string, Category[]> = {};
+    const nameOrder: string[] = []; // Preserve original order based on first appearance
+    sectionCategories.forEach(cat => {
+        if (!groupedByName[cat.name]) {
+            groupedByName[cat.name] = [];
+            nameOrder.push(cat.name);
+        }
+        groupedByName[cat.name].push(cat);
+    });
+
     const isCollapsed = collapsedSections[title];
+
+    // Calculate Section Totals - Summing everything registered to these categories in this month
+    const sectionTotals = {
+        shared: nameOrder.reduce((sum, name) => sum + getAmount(groupedByName[name][0].id, 'SHARED'), 0),
+        u1: nameOrder.reduce((sum, name) => sum + getAmount(groupedByName[name][0].id, 'USER_1'), 0),
+        u2: nameOrder.reduce((sum, name) => sum + getAmount(groupedByName[name][0].id, 'USER_2'), 0),
+    };
 
     return (
     <div className="mb-8 animate-in fade-in slide-in-from-bottom-2 duration-500">
@@ -302,7 +340,7 @@ export const MonthlyWorksheet: React.FC<MonthlyWorksheetProps> = ({ entries, bud
         <>
         <div className="hidden md:grid grid-cols-12 gap-4 items-center mb-2 px-2 text-xs font-semibold text-slate-400">
             <div className="col-span-5">Category</div>
-            <div className="col-span-7 grid grid-cols-3 gap-2">
+            <div className="col-span-7 grid grid-cols-3 gap-2 text-center">
                 <div>Shared</div>
                 <div>{users.user_1?.name}</div>
                 <div>{users.user_2?.name}</div>
@@ -310,24 +348,46 @@ export const MonthlyWorksheet: React.FC<MonthlyWorksheetProps> = ({ entries, bud
         </div>
 
         <div className="space-y-4">
-            {sectionCategories.map(cat => {
+            {nameOrder.map(name => {
+                const catsWithName = groupedByName[name];
+                const primaryCat = catsWithName[0];
+
                 if (isTravelSection) {
-                    const involvedTripIds = [...new Set(entries.filter(e => e.categoryId === cat.id && e.monthId === monthId && e.tripId && e.tripId.length > 0).flatMap(e => e.tripId || []))];
+                    const involvedTripIds = [...new Set(entries.filter(e => catsWithName.some(c => c.id === e.categoryId) && e.monthId === monthId && e.tripId && e.tripId.length > 0).flatMap(e => e.tripId || []))];
                     
                     return (
-                        <div key={cat.id} className="space-y-1">
-                            {renderCategoryRow(cat, showShared, showU1, showU2)}
-                            {involvedTripIds.map(tid => renderCategoryRow(cat, showShared, showU1, showU2, tid, true))}
+                        <div key={name} className="space-y-1">
+                            {renderCategoryRow(name, 'TRAVEL', catsWithName, showShared, showU1, showU2)}
+                            {involvedTripIds.map(tid => renderCategoryRow(name, 'TRAVEL', catsWithName, showShared, showU1, showU2, tid, true))}
                         </div>
                     );
                 }
-                return renderCategoryRow(cat, showShared, showU1, showU2);
+                return renderCategoryRow(name, primaryCat.group, catsWithName, showShared, showU1, showU2);
             })}
+
+            {/* Section Total Row */}
+            <div className="hidden md:grid grid-cols-12 gap-4 items-center pt-4 border-t border-slate-100 px-2">
+                <div className="col-span-5 text-right pr-4">
+                    <span className="text-xs font-bold text-slate-400 uppercase tracking-tight">Section Total:</span>
+                </div>
+                <div className="col-span-7 grid grid-cols-3 gap-2">
+                    <div className="text-center py-2 bg-slate-50/50 rounded-lg text-sm font-bold text-slate-600">{sectionTotals.shared > 0 || showShared ? formatCurrency(sectionTotals.shared, currency) : '-'}</div>
+                    <div className="text-center py-2 bg-slate-50/50 rounded-lg text-sm font-bold text-slate-600">{sectionTotals.u1 > 0 || showU1 ? formatCurrency(sectionTotals.u1, currency) : '-'}</div>
+                    <div className="text-center py-2 bg-slate-50/50 rounded-lg text-sm font-bold text-slate-600">{sectionTotals.u2 > 0 || showU2 ? formatCurrency(sectionTotals.u2, currency) : '-'}</div>
+                </div>
+            </div>
         </div>
         </>
       )}
     </div>
     );
+  };
+
+  // Grand Totals Calculation
+  const grandTotals = {
+      shared: entries.filter(e => e.monthId === monthId && e.account === 'SHARED').reduce((sum, e) => sum + e.amount, 0),
+      u1: entries.filter(e => e.monthId === monthId && e.account === 'USER_1').reduce((sum, e) => sum + e.amount, 0),
+      u2: entries.filter(e => e.monthId === monthId && e.account === 'USER_2').reduce((sum, e) => sum + e.amount, 0),
   };
 
   return (
@@ -350,11 +410,34 @@ export const MonthlyWorksheet: React.FC<MonthlyWorksheetProps> = ({ entries, bud
             </div>
         </div>
         
-        <div className="p-4 sm:p-6 pb-24">
+        <div className="p-4 sm:p-6 pb-48">
             {renderSection("Wealth Building & Savings", c => c.group === 'SAVINGS', true, true, true, false, true)}
             {renderSection("Shared Household & Living", c => c.group !== 'TRAVEL' && c.group !== 'SAVINGS' && c.defaultAccount === 'SHARED', true, false, false)}
             {renderSection("Personal Expenses", c => c.group !== 'TRAVEL' && c.group !== 'SAVINGS' && c.defaultAccount !== 'SHARED', false, true, true)}
             {renderSection("Travel & Adventures", c => c.group === 'TRAVEL', true, true, true, true)}
+
+            {/* Grand Total Row */}
+            <div className="mt-12 pt-8 border-t-2 border-slate-100">
+                <div className="hidden md:grid grid-cols-12 gap-4 items-center px-2">
+                    <div className="col-span-5 text-right pr-6">
+                        <span className="text-sm font-bold text-slate-400 uppercase tracking-widest">Grand Monthly Total</span>
+                    </div>
+                    <div className="col-span-7 grid grid-cols-3 gap-4">
+                        <div className="flex flex-col items-center">
+                            <span className="text-[9px] font-bold text-slate-400 uppercase mb-1">Shared</span>
+                            <div className="w-full text-center py-3 bg-slate-900 rounded-xl text-lg font-bold text-white shadow-sm">{formatCurrency(grandTotals.shared, currency)}</div>
+                        </div>
+                        <div className="flex flex-col items-center">
+                            <span className="text-[9px] font-bold text-slate-400 uppercase mb-1">{users.user_1.name}</span>
+                            <div className="w-full text-center py-3 bg-white border-2 border-blue-500 rounded-xl text-lg font-bold text-blue-600 shadow-sm">{formatCurrency(grandTotals.u1, currency)}</div>
+                        </div>
+                        <div className="flex flex-col items-center">
+                            <span className="text-[9px] font-bold text-slate-400 uppercase mb-1">{users.user_2.name}</span>
+                            <div className="w-full text-center py-3 bg-white border-2 border-pink-500 rounded-xl text-lg font-bold text-pink-600 shadow-sm">{formatCurrency(grandTotals.u2, currency)}</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
         </div>
 
         <div className="absolute bottom-0 w-full bg-white/90 backdrop-blur-md border-t border-slate-200 p-4 flex justify-between items-center shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)] rounded-b-xl z-20">

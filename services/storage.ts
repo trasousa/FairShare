@@ -30,14 +30,19 @@ export const getInstance = async (id: string): Promise<AppInstance | null> => {
     return await response.json();
 };
 
-export const saveInstance = async (instance: AppInstance) => {
+export const saveInstance = async (instance: AppInstance): Promise<{ lastUpdated: number }> => {
     const updatedInstance = { ...instance, lastAccessed: Date.now() };
     const response = await fetch(`${API_URL}/instance`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(updatedInstance)
     });
+    if (response.status === 409) {
+        const errData = await response.json();
+        throw { status: 409, ...errData };
+    }
     if (!response.ok) throw new Error(`Save failed: ${response.statusText}`);
+    return await response.json();
 };
 
 export const deleteInstance = async (id: string) => {

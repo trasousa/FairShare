@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { Budget, Category, AccountType, User, SavingsGoal, ExpenseEntry, CurrencyCode } from '../types';
 import { formatCurrency } from '../services/financeService';
-import { Plus, Target, X, Users, PiggyBank, TrendingUp, Calendar } from 'lucide-react';
+import { Plus, Target, X, Users, PiggyBank, TrendingUp, Calendar, Edit2, Trash2 } from 'lucide-react';
 
 interface BudgetManagerProps {
   budgets: Budget[];
@@ -13,12 +13,15 @@ interface BudgetManagerProps {
   currency: CurrencyCode;
   getInputClass: (isInput?: boolean) => string;
   onAddBudget: (categoryId: string, limit: number, account: AccountType) => void;
-  onAddGoal: (name: string, target: number, targetType: 'FIXED'|'PERCENTAGE', initial: number, account: AccountType, startDate?: string, targetDate?: string) => void;
+  onAddGoal: (name: string, target: number, targetType: 'FIXED'|'PERCENTAGE', initial: number, account: AccountType, startDate?: string, targetDate?: string, projectionPeriod?: 'MONTHLY'|'ANNUAL') => void;
+  onUpdateGoal: (goal: SavingsGoal) => void;
+  onDeleteGoal: (id: string) => void;
 }
 
-export const BudgetManager: React.FC<BudgetManagerProps> = ({ budgets, categories, savings, entries, totalIncome, users, currency, getInputClass, onAddBudget, onAddGoal }) => {
+export const BudgetManager: React.FC<BudgetManagerProps> = ({ budgets, categories, savings, entries, totalIncome, users, currency, getInputClass, onAddBudget, onAddGoal, onUpdateGoal, onDeleteGoal }) => {
   const [activeTab, setActiveTab] = useState<'BUDGETS' | 'GOALS'>('BUDGETS');
   const [isAdding, setIsAdding] = useState(false);
+  const [editingGoal, setEditingGoal] = useState<SavingsGoal | null>(null);
   
   const [selectedCatId, setSelectedCatId] = useState('');
   const [limit, setLimit] = useState('');
@@ -27,6 +30,7 @@ export const BudgetManager: React.FC<BudgetManagerProps> = ({ budgets, categorie
   const [goalName, setGoalName] = useState('');
   const [goalTarget, setGoalTarget] = useState('');
   const [goalType, setGoalType] = useState<'FIXED' | 'PERCENTAGE'>('FIXED');
+  const [goalProjection, setGoalProjection] = useState<'MONTHLY' | 'ANNUAL'>('MONTHLY');
   const [goalInitial, setGoalInitial] = useState('');
   const [goalStartDate, setGoalStartDate] = useState('');
   const [goalTargetDate, setGoalTargetDate] = useState('');
@@ -93,15 +97,46 @@ export const BudgetManager: React.FC<BudgetManagerProps> = ({ budgets, categorie
       );
   };
 
+  const startEditGoal = (goal: SavingsGoal) => {
+      setEditingGoal(goal);
+      setGoalName(goal.name);
+      setGoalTarget(goal.targetAmount.toString());
+      setGoalType(goal.targetType);
+      setGoalProjection(goal.projectionPeriod || 'MONTHLY');
+      setGoalInitial(goal.initialAmount.toString());
+      setGoalStartDate(goal.startDate || '');
+      setGoalTargetDate(goal.targetDate || '');
+      setSelectedAccount(goal.account);
+      setIsAdding(true);
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
   const handleGoalSubmit = (e: React.FormEvent) => {
       e.preventDefault();
       if(goalName && goalTarget) {
-          onAddGoal(goalName, parseFloat(goalTarget), goalType, parseFloat(goalInitial) || 0, selectedAccount, goalStartDate, goalTargetDate);
+          if (editingGoal) {
+              onUpdateGoal({
+                  ...editingGoal,
+                  name: goalName,
+                  targetAmount: parseFloat(goalTarget),
+                  targetType: goalType,
+                  initialAmount: parseFloat(goalInitial) || 0,
+                  account: selectedAccount,
+                  startDate: goalStartDate,
+                  targetDate: goalTargetDate,
+                  projectionPeriod: goalType === 'PERCENTAGE' ? goalProjection : undefined
+              });
+          } else {
+              onAddGoal(goalName, parseFloat(goalTarget), goalType, parseFloat(goalInitial) || 0, selectedAccount, goalStartDate, goalTargetDate, goalType === 'PERCENTAGE' ? goalProjection : undefined);
+          }
+          
           setIsAdding(false);
+          setEditingGoal(null);
           setGoalName('');
           setGoalTarget('');
           setGoalInitial('');
           setGoalType('FIXED');
+          setGoalProjection('MONTHLY');
           setGoalStartDate('');
           setGoalTargetDate('');
       }
@@ -114,8 +149,9 @@ export const BudgetManager: React.FC<BudgetManagerProps> = ({ budgets, categorie
 
   const renderGoalCard = (goal: SavingsGoal) => {
       const current = getGoalProgress(goal);
+      const baseIncome = goal.projectionPeriod === 'ANNUAL' ? totalIncome * 12 : totalIncome;
       const targetVal = goal.targetType === 'PERCENTAGE' 
-        ? totalIncome * (goal.targetAmount / 100) 
+        ? baseIncome * (goal.targetAmount / 100) 
         : goal.targetAmount;
         
       const progress = targetVal > 0 ? Math.min((current / targetVal) * 100, 100) : 0;
@@ -123,22 +159,23 @@ export const BudgetManager: React.FC<BudgetManagerProps> = ({ budgets, categorie
       const accountColor = goal.account === 'SHARED' ? 'bg-purple-100 text-purple-700' : goal.account === 'USER_1' ? 'bg-blue-100 text-blue-700' : 'bg-pink-100 text-pink-700';
 
       return (
-          <div key={goal.id} className="bg-white p-5 rounded-xl shadow-sm border border-slate-200 flex flex-col justify-between">
+          <div key={goal.id} className="bg-white p-5 rounded-xl shadow-sm border border-slate-200 flex flex-col justify-between relative group">
               <div>
                 <div className="flex justify-between items-start mb-4">
                     <div>
                         <h4 className="font-bold text-slate-800 text-lg">{goal.name}</h4>
                         <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md mt-1 inline-block ${accountColor}`}>{accountLabel}</span>
                     </div>
-                    <div className="h-10 w-10 bg-emerald-50 text-emerald-600 rounded-full flex items-center justify-center">
-                        <TrendingUp size={20} />
+                    <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <button onClick={() => startEditGoal(goal)} className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition"><Edit2 size={14} /></button>
+                        <button onClick={() => confirm(`Delete goal "${goal.name}"?`) && onDeleteGoal(goal.id)} className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition"><Trash2 size={14} /></button>
                     </div>
                 </div>
                 <div className="mb-2 flex justify-between items-end">
                     <span className="text-2xl font-bold text-slate-700">{formatCurrency(current, currency)}</span>
                     <div className="text-right">
                          <span className="text-sm text-slate-400 block mb-0.5">
-                             Target: {goal.targetType === 'PERCENTAGE' ? `${goal.targetAmount}% of Income` : formatCurrency(targetVal, currency)}
+                             Target: {goal.targetType === 'PERCENTAGE' ? `${goal.targetAmount}% of ${goal.projectionPeriod === 'ANNUAL' ? 'Annual' : 'Monthly'} Income` : formatCurrency(targetVal, currency)}
                          </span>
                          {goal.targetType === 'PERCENTAGE' && (
                              <span className="text-xs text-slate-300 font-medium">({formatCurrency(targetVal, currency)} approx)</span>
@@ -171,13 +208,13 @@ export const BudgetManager: React.FC<BudgetManagerProps> = ({ budgets, categorie
     <div className="space-y-6">
         <div className="flex items-center gap-4 border-b border-slate-200 pb-1">
              <button 
-                onClick={() => { setActiveTab('BUDGETS'); setIsAdding(false); }}
+                onClick={() => { setActiveTab('BUDGETS'); setIsAdding(false); setEditingGoal(null); }}
                 className={`pb-3 px-2 text-sm font-bold transition ${activeTab === 'BUDGETS' ? 'text-indigo-600 border-b-2 border-indigo-600' : 'text-slate-500 hover:text-slate-800'}`}
              >
                  Spending Budgets
              </button>
              <button 
-                onClick={() => { setActiveTab('GOALS'); setIsAdding(false); }}
+                onClick={() => { setActiveTab('GOALS'); setIsAdding(false); setEditingGoal(null); }}
                 className={`pb-3 px-2 text-sm font-bold transition ${activeTab === 'GOALS' ? 'text-indigo-600 border-b-2 border-indigo-600' : 'text-slate-500 hover:text-slate-800'}`}
              >
                  Savings & Goals
@@ -200,7 +237,19 @@ export const BudgetManager: React.FC<BudgetManagerProps> = ({ budgets, categorie
                     </select>
                 )}
                 <button 
-                    onClick={() => setIsAdding(!isAdding)}
+                    onClick={() => {
+                        if (isAdding) {
+                            setEditingGoal(null);
+                            setGoalName('');
+                            setGoalTarget('');
+                            setGoalInitial('');
+                            setGoalType('FIXED');
+                            setGoalProjection('MONTHLY');
+                            setGoalStartDate('');
+                            setGoalTargetDate('');
+                        }
+                        setIsAdding(!isAdding);
+                    }}
                     className="flex items-center gap-2 bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-indigo-700 transition shadow-sm"
                 >
                     {isAdding ? <><X size={16}/> Cancel</> : <><Plus size={16}/> New {activeTab === 'BUDGETS' ? 'Budget' : 'Goal'}</>}
@@ -258,9 +307,17 @@ export const BudgetManager: React.FC<BudgetManagerProps> = ({ budgets, categorie
 
                         <div>
                              <label className="block text-xs font-semibold text-slate-500 mb-1">{goalType === 'FIXED' ? 'Target Amount ($)' : 'Percentage (%)'}</label>
-                             <input type="number" value={goalTarget} onChange={e => setGoalTarget(e.target.value)} className="w-full text-sm border border-slate-300 rounded-lg p-2.5 outline-none" placeholder={goalType === 'FIXED' ? '20000' : '20'} required />
+                             <div className="space-y-2">
+                                <input type="number" value={goalTarget} onChange={e => setGoalTarget(e.target.value)} className="w-full text-sm border border-slate-300 rounded-lg p-2.5 outline-none" placeholder={goalType === 'FIXED' ? '20000' : '20'} required />
+                                {goalType === 'PERCENTAGE' && (
+                                    <div className="flex bg-slate-100 rounded-lg p-1 w-full">
+                                        <button type="button" onClick={() => setGoalProjection('MONTHLY')} className={`flex-1 py-1 text-[10px] rounded-md font-bold transition ${goalProjection === 'MONTHLY' ? 'bg-white shadow-sm text-indigo-600' : 'text-slate-500'}`}>Monthly Projection</button>
+                                        <button type="button" onClick={() => setGoalProjection('ANNUAL')} className={`flex-1 py-1 text-[10px] rounded-md font-bold transition ${goalProjection === 'ANNUAL' ? 'bg-white shadow-sm text-indigo-600' : 'text-slate-500'}`}>Annual Projection</button>
+                                    </div>
+                                )}
+                             </div>
                              {goalType === 'PERCENTAGE' && goalTarget && (
-                                 <p className="text-[10px] text-slate-400 mt-1">Approx. {formatCurrency(totalIncome * (parseFloat(goalTarget)/100), currency)} based on current income.</p>
+                                 <p className="text-[10px] text-slate-400 mt-1">Approx. {formatCurrency((goalProjection === 'ANNUAL' ? totalIncome * 12 : totalIncome) * (parseFloat(goalTarget)/100), currency)} based on {goalProjection === 'ANNUAL' ? 'annual' : 'monthly'} income.</p>
                              )}
                         </div>
 
@@ -280,7 +337,7 @@ export const BudgetManager: React.FC<BudgetManagerProps> = ({ budgets, categorie
                             </div>
                         </div>
 
-                        <button type="submit" className="col-span-1 md:col-span-2 w-full bg-slate-900 text-white text-sm font-medium py-3 rounded-lg hover:bg-slate-800 transition">Create Goal</button>
+                        <button type="submit" className="col-span-1 md:col-span-2 w-full bg-slate-900 text-white text-sm font-medium py-3 rounded-lg hover:bg-slate-800 transition">{editingGoal ? 'Update Goal' : 'Create Goal'}</button>
                      </form>
                  )}
              </div>

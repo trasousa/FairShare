@@ -33,12 +33,25 @@ function initDb() {
         id TEXT PRIMARY KEY,
         name TEXT,
         lastAccessed INTEGER,
+        lastUpdated INTEGER,
         data TEXT
     )`, (err) => {
         if (err) {
              console.error("Error creating table:", err);
         } else {
              console.log("Database table 'instances' is ready.");
+             // Migration: Add lastUpdated if it doesn't exist
+             db.run("ALTER TABLE instances ADD COLUMN lastUpdated INTEGER", (err) => {
+                 if (err) {
+                     if (err.message.includes("duplicate column name")) {
+                         // Column already exists, ignore
+                     } else {
+                         console.error("Migration error (lastUpdated):", err);
+                     }
+                 } else {
+                     console.log("Migration: added lastUpdated column.");
+                 }
+             });
         }
     });
 }
@@ -55,7 +68,7 @@ app.get('/api/health', (req, res) => {
 });
 
 app.get('/api/instances', (req, res) => {
-    db.all("SELECT id, name, lastAccessed FROM instances ORDER BY lastAccessed DESC", [], (err, rows) => {
+    db.all("SELECT id, name, lastAccessed, lastUpdated FROM instances ORDER BY lastAccessed DESC", [], (err, rows) => {
         if (err) {
             console.error("GET /instances error:", err);
             res.status(500).json({ error: err.message });
@@ -79,7 +92,8 @@ app.get('/api/instance/:id', (req, res) => {
                     ...JSON.parse(row.data),
                     id: row.id,
                     name: row.name,
-                    lastAccessed: row.lastAccessed
+                    lastAccessed: row.lastAccessed,
+                    lastUpdated: row.lastUpdated
                 };
                 res.json(fullInstance);
             } catch (parseErr) {
@@ -94,28 +108,45 @@ app.get('/api/instance/:id', (req, res) => {
 
 app.put('/api/instance', (req, res) => {
     const instance = req.body;
-    const { id, name, lastAccessed } = instance;
+    const { id, name, lastAccessed, lastUpdated: incomingLastUpdated } = instance;
     
     if (!id || !name) {
         res.status(400).json({ error: "Missing id or name" });
         return;
     }
 
-    const dataString = JSON.stringify(instance);
-
-    db.run(
-        `INSERT INTO instances (id, name, lastAccessed, data) VALUES (?, ?, ?, ?)
-         ON CONFLICT(id) DO UPDATE SET name = ?, lastAccessed = ?, data = ?`,
-        [id, name, lastAccessed, dataString, name, lastAccessed, dataString],
-        function(err) {
-            if (err) {
-                console.error("PUT /instance error:", err);
-                res.status(500).json({ error: err.message });
-                return;
-            }
-            res.json({ message: "Saved successfully", id: id });
+    // Check for conflict
+    db.get("SELECT lastUpdated FROM instances WHERE id = ?", [id], (err, row) => {
+        if (err) {
+            console.error("DB Error on conflict check:", err);
+            res.status(500).json({ error: err.message });
+            return;
         }
-    );
+
+        if (row && incomingLastUpdated && row.lastUpdated > incomingLastUpdated) {
+            // Server has a newer version
+            res.status(409).json({ error: "Conflict: A newer version exists on the server. Please refresh.", serverLastUpdated: row.lastUpdated });
+            return;
+        }
+
+        const now = Date.now();
+        const updatedInstance = { ...instance, lastUpdated: now, lastAccessed: now };
+        const dataString = JSON.stringify(updatedInstance);
+
+        db.run(
+            `INSERT INTO instances (id, name, lastAccessed, lastUpdated, data) VALUES (?, ?, ?, ?, ?)
+             ON CONFLICT(id) DO UPDATE SET name = ?, lastAccessed = ?, lastUpdated = ?, data = ?`,
+            [id, name, now, now, dataString, name, now, now, dataString],
+            function(err) {
+                if (err) {
+                    console.error("PUT /instance error:", err);
+                    res.status(500).json({ error: err.message });
+                    return;
+                }
+                res.json({ message: "Saved successfully", id: id, lastUpdated: now });
+            }
+        );
+    });
 });
 
 app.delete('/api/instance/:id', (req, res) => {

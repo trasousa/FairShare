@@ -47,8 +47,10 @@ function App({ instanceId, onExit }: AppProps) {
   const [loading, setLoading] = useState(true);
   const [easterEggCount, setEasterEggCount] = useState(0);
   const [showEasterEgg, setShowEasterEgg] = useState(false);
+  const [suggestionText, setSuggestionText] = useState('');
   const [instanceName, setInstanceName] = useState('');
   const [saveStatus, setSaveStatus] = useState<SaveStatus>('saved');
+  const [lastUpdated, setLastUpdated] = useState<number>(0);
   
   // Navigation State
   const [activeMainTab, setActiveMainTab] = useState<MainTab>('insights');
@@ -80,6 +82,7 @@ function App({ instanceId, onExit }: AppProps) {
   const [budgets, setBudgets] = useState<Budget[]>([]);
   const [savings, setSavings] = useState<SavingsGoal[]>([]);
   const [trips, setTrips] = useState<Trip[]>([]);
+  const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
 
   // Close dropdowns on outside click
   useEffect(() => {
@@ -114,6 +117,8 @@ function App({ instanceId, onExit }: AppProps) {
             setBudgets(data.data.budgets);
             setSavings(data.data.savings);
             setTrips(data.data.trips);
+            setSuggestions(data.data.suggestions || []);
+            setLastUpdated(data.lastUpdated || 0);
             setLoading(false);
         } else {
             onExit(); // Instance not found
@@ -121,6 +126,34 @@ function App({ instanceId, onExit }: AppProps) {
     };
     loadData();
   }, [instanceId]);
+
+  // Sync polling (every 10 seconds)
+  useEffect(() => {
+      if (loading || saveStatus !== 'saved') return;
+
+      const poll = async () => {
+          try {
+              const data = await getInstance(instanceId);
+              if (data && data.lastUpdated && data.lastUpdated > lastUpdated) {
+                  // Newer data on server!
+                  setEntries(data.data.entries);
+                  setIncomes(data.data.incomes);
+                  setCategories(data.data.categories);
+                  setBudgets(data.data.budgets);
+                  setSavings(data.data.savings);
+                  setTrips(data.data.trips);
+                  setSuggestions(data.data.suggestions || []);
+                  setLastUpdated(data.lastUpdated);
+                  console.log("Synced newer data from server");
+              }
+          } catch (e) {
+              console.error("Polling error:", e);
+          }
+      };
+
+      const interval = setInterval(poll, 10000);
+      return () => clearInterval(interval);
+  }, [instanceId, loading, saveStatus, lastUpdated]);
 
   // Persist Data Changes
   useEffect(() => {
@@ -130,31 +163,56 @@ function App({ instanceId, onExit }: AppProps) {
       
       const saveData = async () => {
           setSaveStatus('saving');
-          const updatedInstance: AppInstance = {
-              id: instanceId,
-              name: instanceName,
-              created: Date.now(),
-              lastAccessed: Date.now(),
-              currency: currency,
-              theme: theme,
-              users: users,
-              data: {
-                  entries,
-                  categories,
-                  budgets,
-                  savings,
-                  trips,
-                  incomes
+          try {
+              const updatedInstance: AppInstance = {
+                  id: instanceId,
+                  name: instanceName,
+                  created: Date.now(),
+                  lastAccessed: Date.now(),
+                  lastUpdated: lastUpdated,
+                  currency: currency,
+                  theme: theme,
+                  users: users,
+                  data: {
+                      entries,
+                      categories,
+                      budgets,
+                      savings,
+                      trips,
+                      incomes,
+                      suggestions
+                  }
+              };
+              const result = await saveInstance(updatedInstance);
+              setLastUpdated(result.lastUpdated);
+              setSaveStatus('saved');
+          } catch (err: any) {
+              if (err.status === 409) {
+                  console.warn("Conflict detected, reloading data...");
+                  // Reload latest
+                  const data = await getInstance(instanceId);
+                  if (data) {
+                      setEntries(data.data.entries);
+                      setIncomes(data.data.incomes);
+                      setCategories(data.data.categories);
+                      setBudgets(data.data.budgets);
+                      setSavings(data.data.savings);
+                      setTrips(data.data.trips);
+                      setSuggestions(data.data.suggestions || []);
+                      setLastUpdated(data.lastUpdated || 0);
+                  }
+                  setSaveStatus('saved');
+              } else {
+                  console.error("Save error:", err);
+                  setSaveStatus('unsaved');
               }
-          };
-          await saveInstance(updatedInstance);
-          setSaveStatus('saved');
+          }
       };
 
-      const timeoutId = setTimeout(saveData, 1000); 
+      const timeoutId = setTimeout(saveData, 500); 
       return () => clearTimeout(timeoutId);
 
-  }, [entries, incomes, categories, budgets, savings, trips, users, currency, theme, loading, instanceName]);
+  }, [entries, incomes, categories, budgets, savings, trips, suggestions, users, currency, theme, loading, instanceName]);
 
   const changeMonth = (direction: -1 | 1) => {
       const [year, month] = currentMonth.split('-').map(Number);
@@ -194,6 +252,20 @@ function App({ instanceId, onExit }: AppProps) {
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
+  };
+
+  const handleAddSuggestion = (text: string) => {
+      if (!text.trim()) return;
+      const newSug: Suggestion = {
+          id: Math.random().toString(36).substr(2, 9),
+          text: text.trim(),
+          timestamp: Date.now()
+      };
+      setSuggestions(prev => [newSug, ...prev]);
+  };
+
+  const handleResolveSuggestion = (id: string) => {
+      setSuggestions(prev => prev.filter(s => s.id !== id));
   };
 
   const filterByDate = (dateStr: string) => {
@@ -411,9 +483,30 @@ function App({ instanceId, onExit }: AppProps) {
                                   return [...prev, { id: Math.random().toString(36), monthId: currentMonth, categoryId: cid, account: acc, amount: needed, entryType: 'worksheet', tripId: tid ? [tid] : [], description: desc }];
                               });
                           }}
-                          onAddCategory={(n, g, a) => setCategories(p => [...p, {id: n.toLowerCase().replace(/\s+/g, '_') + '_' + Math.random().toString(36).substr(2, 4), name: n, group: g as any, defaultAccount: a}])}
-                          onEditCategory={(id, n) => setCategories(p => p.map(c => c.id === id ? { ...c, name: n } : c))}
-                          onDeleteCategory={(id) => setCategories(p => p.filter(c => c.id !== id))}
+                          onAddCategory={(n, g, a) => {
+                              setCategories(p => {
+                                  if (p.some(c => c.name.toLowerCase() === n.toLowerCase() && c.group === g && c.defaultAccount === a)) return p;
+                                  return [...p, {id: n.toLowerCase().replace(/\s+/g, '_') + '_' + Math.random().toString(36).substr(2, 4), name: n, group: g as any, defaultAccount: a}];
+                              });
+                          }}
+                          onEditCategory={(id, n) => {
+                              setCategories(p => {
+                                  const target = p.find(c => c.id === id);
+                                  if (!target) return p;
+                                  const oldName = target.name;
+                                  const group = target.group;
+                                  return p.map(c => (c.name === oldName && c.group === group) ? { ...c, name: n } : c);
+                              });
+                          }}
+                          onDeleteCategory={(id) => {
+                              setCategories(p => {
+                                  const target = p.find(c => c.id === id);
+                                  if (!target) return p;
+                                  const name = target.name;
+                                  const group = target.group;
+                                  return p.filter(c => !(c.name === name && c.group === group));
+                              });
+                          }}
                           onReorderCategories={(newCats) => setCategories(newCats)}
                           onDateClick={() => setIsMonthPickerOpen(true)}
                         />
@@ -438,10 +531,15 @@ function App({ instanceId, onExit }: AppProps) {
                     
                     {activePlanningView === 'budget' && <BudgetManager budgets={budgets} categories={categories} savings={savings} entries={entries} totalIncome={currentTotalIncome} users={users} currency={currency} getInputClass={getInputClass}
                       onAddBudget={(cid, lim, acc) => setBudgets(p => [...p, { categoryId: cid, limit: lim, account: acc }])}
-                      onAddGoal={(n, t, tt, i, acc, sd, td) => {
+                      onAddGoal={(n, t, tt, i, acc, sd, td, pp) => {
                           const gid = n.toLowerCase().replace(/\s+/g, '_') + '_' + Math.random().toString(36).substr(2, 4);
                           setCategories(p => [...p, { id: gid, name: n, group: 'SAVINGS', defaultAccount: acc }]);
-                          setSavings(p => [...p, { id: gid, name: n, targetAmount: t, targetType: tt, initialAmount: i, account: acc, startDate: sd, targetDate: td }]);
+                          setSavings(p => [...p, { id: gid, name: n, targetAmount: t, targetType: tt, initialAmount: i, account: acc, startDate: sd, targetDate: td, projectionPeriod: pp }]);
+                      }}
+                      onUpdateGoal={(updated) => setSavings(p => p.map(s => s.id === updated.id ? updated : s))}
+                      onDeleteGoal={(id) => {
+                          setSavings(p => p.filter(s => s.id !== id));
+                          setCategories(p => p.filter(c => c.id !== id));
                       }}
                     />}
                 </div>
@@ -486,16 +584,59 @@ function App({ instanceId, onExit }: AppProps) {
         </div>
 
         {showEasterEgg && (
-          <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm animate-in fade-in duration-200" onClick={() => setShowEasterEgg(false)}>
-              <div className="bg-white p-8 rounded-3xl shadow-2xl transform transition-all scale-100 animate-in zoom-in-95 duration-200 text-center max-w-xs mx-4 border border-white/20" onClick={e => e.stopPropagation()}>
+          <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm animate-in fade-in duration-200" onClick={() => { setShowEasterEgg(false); setSuggestionText(''); }}>
+              <div className="bg-white p-8 rounded-3xl shadow-2xl transform transition-all scale-100 animate-in zoom-in-95 duration-200 text-center max-w-sm w-full mx-4 border border-white/20" onClick={e => e.stopPropagation()}>
                   <div className="w-20 h-20 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-3xl flex items-center justify-center text-white font-bold text-3xl mx-auto mb-6 shadow-xl shadow-indigo-500/30 rotate-3">FS</div>
                   <h3 className="text-2xl font-bold text-slate-800 mb-2">FairShare</h3>
-                  <p className="text-slate-500 font-medium mb-1">Made with ❤️ by</p>
-                  <a href="https://github.com/trasousa" target="_blank" rel="noopener noreferrer" className="text-indigo-600 font-bold hover:underline mb-6 block">trasousa</a>
-                  <div className="inline-flex items-center gap-2 px-3 py-1 bg-slate-100 rounded-full text-xs font-mono text-slate-500 mb-8 border border-slate-200">
-                      <span>v1.0.0</span>
+                  
+                  <div className="inline-flex items-center gap-2 px-3 py-1 bg-slate-100 rounded-full text-xs font-mono text-slate-500 mb-6 border border-slate-200">
+                      <span>v1.1</span>
                   </div>
-                  <button onClick={() => setShowEasterEgg(false)} className="w-full bg-slate-900 text-white py-3.5 rounded-2xl font-bold hover:bg-slate-800 transition active:scale-95">Awesome!</button>
+
+                  <div className="text-left border-t border-slate-100 pt-6 mt-2 space-y-4">
+                      <div>
+                        <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">New Improvement Suggestion</label>
+                        <textarea 
+                            value={suggestionText}
+                            onChange={(e) => setSuggestionText(e.target.value)}
+                            placeholder="What should we add next?..."
+                            className="w-full text-sm border border-slate-200 rounded-xl p-3 focus:ring-2 focus:ring-indigo-100 outline-none transition-all resize-none bg-slate-50 mb-2"
+                            rows={2}
+                        />
+                        <button 
+                            disabled={!suggestionText.trim()}
+                            onClick={() => { handleAddSuggestion(suggestionText); setSuggestionText(''); }}
+                            className="w-full py-2 bg-indigo-600 text-white rounded-xl text-xs font-bold hover:bg-indigo-700 transition disabled:opacity-50"
+                        >
+                            Save Suggestion
+                        </button>
+                      </div>
+
+                      {suggestions.length > 0 && (
+                          <div className="space-y-2">
+                              <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider">Pending Suggestions ({suggestions.length})</label>
+                              <div className="max-h-48 overflow-y-auto pr-2 space-y-2 custom-scrollbar">
+                                  {suggestions.map(s => (
+                                      <div key={s.id} className="bg-slate-50 border border-slate-100 p-3 rounded-xl flex justify-between items-start gap-3 group">
+                                          <div className="flex-1">
+                                              <p className="text-xs text-slate-700 leading-relaxed">{s.text}</p>
+                                              <span className="text-[9px] text-slate-400 mt-1 block">{new Date(s.timestamp).toLocaleDateString()}</span>
+                                          </div>
+                                          <button 
+                                            onClick={() => handleResolveSuggestion(s.id)}
+                                            className="p-1.5 text-slate-300 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition"
+                                            title="Resolve"
+                                          >
+                                              <CheckCircle2 size={14} />
+                                          </button>
+                                      </div>
+                                  ))}
+                              </div>
+                          </div>
+                      )}
+                  </div>
+
+                  <button onClick={() => { setShowEasterEgg(false); setSuggestionText(''); }} className="w-full mt-6 bg-slate-900 text-white py-3.5 rounded-2xl font-bold hover:bg-slate-800 transition active:scale-95">Close</button>
               </div>
           </div>
         )}

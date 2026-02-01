@@ -46,6 +46,8 @@ export const IncomeManager: React.FC<IncomeManagerProps> = ({ incomes, currentMo
       return users.user_2?.color || '#ec4899';
   };
 
+  const symbol = currency === 'EUR' ? '€' : currency === 'GBP' ? '£' : currency === 'JPY' ? '¥' : currency === 'BRL' ? 'R$' : '$';
+
   return (
     <div className="space-y-6">
       <MonthPicker
@@ -91,7 +93,7 @@ export const IncomeManager: React.FC<IncomeManagerProps> = ({ incomes, currentMo
                   <div>
                       <label className="block text-xs font-semibold text-slate-500 mb-1">Amount</label>
                       <div className="relative">
-                          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 font-bold">$</span>
+                          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 font-bold">{symbol}</span>
                           <input 
                               type="number" 
                               value={amount} 
