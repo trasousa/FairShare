@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { IncomeEntry, AccountType, User, CurrencyCode } from '../types';
 import { formatCurrency } from '../services/financeService';
 import { Plus, Trash2, ArrowUpRight, Calendar as CalendarIcon } from 'lucide-react';
@@ -21,7 +21,11 @@ export const IncomeManager: React.FC<IncomeManagerProps> = ({ incomes, currentMo
   const [incomeMonth, setIncomeMonth] = useState(currentMonth);
   const [isMonthPickerOpen, setIsMonthPickerOpen] = useState(false);
 
-  const monthlyIncomes = incomes.filter(i => i.monthId === currentMonth);
+  useEffect(() => {
+    setIncomeMonth(currentMonth);
+  }, [currentMonth]);
+
+  const monthlyIncomes = incomes.filter(i => i.monthId === incomeMonth);
   const totalMonthlyIncome = monthlyIncomes.reduce((sum, i) => sum + i.amount, 0);
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -58,7 +62,7 @@ export const IncomeManager: React.FC<IncomeManagerProps> = ({ incomes, currentMo
            <h2 className="text-xl font-bold text-slate-800 flex items-center gap-2">
               <ArrowUpRight className="text-emerald-600" /> Income Sources
            </h2>
-           <p className="text-sm text-slate-500">Manage salary, bonuses, and other inflows for {new Date(currentMonth).toLocaleDateString('default', { month: 'long', year: 'numeric' })}.</p>
+           <p className="text-sm text-slate-500">Manage salary, bonuses, and other inflows for {new Date(incomeMonth).toLocaleDateString('default', { month: 'long', year: 'numeric' })}.</p>
         </div>
         <div className="bg-emerald-50 px-4 py-2 rounded-xl text-right">
              <span className="text-xs font-bold text-emerald-600 uppercase tracking-wide block">Total Income</span>

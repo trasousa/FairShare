@@ -30,7 +30,7 @@ export interface ExpenseEntry {
   description?: string; // Optional for single entries
   date?: string; // Optional ISO date
   entryType: 'worksheet' | 'single'; // Distinguish between bulk totals and specific items
-  tripId?: string; // Optional: Links expense to a specific trip
+  tripId?: string[]; // Optional: Links expense to one or more specific trips
   tripCategory?: 'FLIGHT' | 'ACCOMMODATION' | 'FOOD' | 'ACTIVITY' | 'OTHER'; // Specific to travel
 }
 

@@ -20,7 +20,7 @@ export const SingleEntryForm: React.FC<SingleEntryFormProps> = ({ categories, tr
   const [account, setAccount] = useState<AccountType>('SHARED');
   const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
 
-  const [selectedTripId, setSelectedTripId] = useState('');
+  const [selectedTripIds, setSelectedTripIds] = useState<string[]>([]);
   const [tripCategory, setTripCategory] = useState<ExpenseEntry['tripCategory']>('OTHER');
 
   const selectedCategory = categories.find(c => c.id === categoryId);
@@ -37,8 +37,8 @@ export const SingleEntryForm: React.FC<SingleEntryFormProps> = ({ categories, tr
     e.preventDefault();
     if (!amount || !categoryId) return;
     
-    if (isTravelCategory && !selectedTripId) {
-        alert("Please select a Trip for this travel expense.");
+    if (isTravelCategory && selectedTripIds.length === 0) {
+        alert("Please select at least one Trip for this travel expense.");
         return;
     }
 
@@ -50,15 +50,22 @@ export const SingleEntryForm: React.FC<SingleEntryFormProps> = ({ categories, tr
         description,
         date,
         entryType: 'single',
-        tripId: isTravelCategory ? selectedTripId : undefined,
+        tripId: isTravelCategory ? selectedTripIds : undefined,
         tripCategory: isTravelCategory ? tripCategory : undefined
     });
 
     setAmount('');
     setDescription('');
     if(isTravelCategory) {
+        setSelectedTripIds([]);
         setTripCategory('OTHER');
     }
+  };
+
+  const handleTripSelection = (tripId: string) => {
+    setSelectedTripIds(prev => 
+        prev.includes(tripId) ? prev.filter(id => id !== tripId) : [...prev, tripId]
+    );
   };
 
   const containerClass = theme === 'dark' ? 'bg-slate-900 border-slate-700' : 'bg-white border-slate-200';
@@ -164,18 +171,15 @@ export const SingleEntryForm: React.FC<SingleEntryFormProps> = ({ categories, tr
                    </h3>
                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                        <div>
-                           <label className="block text-xs font-semibold text-slate-500 mb-1">Select Trip</label>
-                           <select 
-                                value={selectedTripId}
-                                onChange={e => setSelectedTripId(e.target.value)}
-                                className={getInputClass(false)}
-                                required
-                           >
-                               <option value="">-- Choose Trip --</option>
+                           <label className="block text-xs font-semibold text-slate-500 mb-1">Select Trip(s)</label>
+                           <div className="max-h-24 overflow-y-auto bg-white border border-indigo-200 rounded-lg p-2 space-y-1">
                                {trips.filter(t => t.status !== 'COMPLETED').map(t => (
-                                   <option key={t.id} value={t.id}>{t.name}</option>
+                                   <label key={t.id} className={`flex items-center gap-2 p-2 rounded-md cursor-pointer transition ${selectedTripIds.includes(t.id) ? 'bg-indigo-100' : 'hover:bg-indigo-50'}`}>
+                                       <input type="checkbox" checked={selectedTripIds.includes(t.id)} onChange={() => handleTripSelection(t.id)} className="rounded text-indigo-600 focus:ring-indigo-500" />
+                                       <span className="text-sm font-medium text-slate-700">{t.name}</span>
+                                   </label>
                                ))}
-                           </select>
+                           </div>
                            {trips.length === 0 && <p className="text-xs text-red-500 mt-1">No active trips found. Create one in Travel tab first.</p>}
                        </div>
                        <div>

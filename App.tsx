@@ -397,20 +397,24 @@ function App({ instanceId, onExit }: AppProps) {
                           getInputClass={getInputClass}
                           onUpdateEntry={(cid, acc, amt, tid, desc) => {
                               setEntries(prev => {
-                                  const singleSum = prev.filter(e => e.categoryId === cid && e.account === acc && e.monthId === currentMonth && e.entryType === 'single').reduce((s, e) => s + e.amount, 0);
+                                  // For worksheet entries, we filter by category, account, month, AND specific trip
+                                  const singleSum = prev.filter(e => e.categoryId === cid && e.account === acc && e.monthId === currentMonth && e.entryType === 'single' && (tid ? e.tripId?.includes(tid) : (!e.tripId || e.tripId.length === 0))).reduce((s, e) => s + e.amount, 0);
                                   const needed = amt - singleSum;
-                                  const idx = prev.findIndex(e => e.categoryId === cid && e.account === acc && e.monthId === currentMonth && e.entryType === 'worksheet');
+                                  
+                                  const idx = prev.findIndex(e => e.categoryId === cid && e.account === acc && e.monthId === currentMonth && e.entryType === 'worksheet' && (tid ? e.tripId?.includes(tid) : (!e.tripId || e.tripId.length === 0)));
+                                  
                                   if (idx >= 0) { 
                                       const next = [...prev]; 
-                                      next[idx] = { ...next[idx], amount: needed, ...(tid !== undefined ? { tripId: tid } : {}), ...(desc !== undefined ? { description: desc } : {}) }; 
+                                      next[idx] = { ...next[idx], amount: needed, ...(tid !== undefined ? { tripId: tid ? [tid] : [] } : {}), ...(desc !== undefined ? { description: desc } : {}) }; 
                                       return next; 
                                   }
-                                  return [...prev, { id: Math.random().toString(36), monthId: currentMonth, categoryId: cid, account: acc, amount: needed, entryType: 'worksheet', tripId: tid, description: desc }];
+                                  return [...prev, { id: Math.random().toString(36), monthId: currentMonth, categoryId: cid, account: acc, amount: needed, entryType: 'worksheet', tripId: tid ? [tid] : [], description: desc }];
                               });
                           }}
                           onAddCategory={(n, g, a) => setCategories(p => [...p, {id: n.toLowerCase().replace(/\s+/g, '_') + '_' + Math.random().toString(36).substr(2, 4), name: n, group: g as any, defaultAccount: a}])}
                           onEditCategory={(id, n) => setCategories(p => p.map(c => c.id === id ? { ...c, name: n } : c))}
                           onDeleteCategory={(id) => setCategories(p => p.filter(c => c.id !== id))}
+                          onReorderCategories={(newCats) => setCategories(newCats)}
                           onDateClick={() => setIsMonthPickerOpen(true)}
                         />
                     )}
