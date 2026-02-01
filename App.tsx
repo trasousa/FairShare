@@ -448,7 +448,17 @@ function App({ instanceId, onExit }: AppProps) {
                     )}
 
                     {activeInsightsView === 'monthly' && (
-                        <MonthlyDashboard currentMonth={currentMonth} entries={entries} budgets={budgets} categories={categories} savings={savings} incomes={incomes} users={users} currency={currency} />
+                        <MonthlyDashboard 
+                            currentMonth={currentMonth} 
+                            entries={entries} 
+                            budgets={budgets} 
+                            categories={categories} 
+                            savings={savings} 
+                            incomes={incomes} 
+                            users={users} 
+                            currency={currency} 
+                            onDeleteEntry={(id) => setEntries(prev => prev.filter(e => e.id !== id))}
+                        />
                     )}
                 </>
             )}

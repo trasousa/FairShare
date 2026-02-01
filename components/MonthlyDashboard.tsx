@@ -2,7 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { ExpenseEntry, Budget, Category, SavingsGoal, IncomeEntry, User, CurrencyCode, AccountType } from '../types';
 import { AccountSummary } from './AccountSummary';
 import { formatCurrency, getMonthLabel } from '../services/financeService';
-import { TrendingUp, AlertCircle, CheckCircle2, ChevronRight, ChevronDown, Filter, GitFork, List, MessageSquare, Info } from 'lucide-react';
+import { TrendingUp, AlertCircle, CheckCircle2, ChevronRight, ChevronDown, Filter, GitFork, List, MessageSquare, Info, Trash2 } from 'lucide-react';
 import { ResponsiveContainer, Sankey, Tooltip as RechartsTooltip, Layer, Rectangle } from 'recharts';
 import { AppTooltip } from './AppTooltip';
 
@@ -15,9 +15,10 @@ interface MonthlyDashboardProps {
   users: Record<string, User>;
   currency: CurrencyCode;
   currentMonth: string;
+  onDeleteEntry: (id: string) => void;
 }
 
-export const MonthlyDashboard: React.FC<MonthlyDashboardProps> = ({ entries, budgets, categories, savings, incomes, users, currency, currentMonth }) => {
+export const MonthlyDashboard: React.FC<MonthlyDashboardProps> = ({ entries, budgets, categories, savings, incomes, users, currency, currentMonth, onDeleteEntry }) => {
   const [expandedCatId, setExpandedCatId] = useState<string | null>(null);
   const [expandedGroupIds, setExpandedGroupIds] = useState<Record<string, boolean>>({});
   const [viewMode, setViewMode] = useState<'LIST' | 'FLOW'>('LIST');
@@ -591,7 +592,7 @@ export const MonthlyDashboard: React.FC<MonthlyDashboardProps> = ({ entries, bud
                                                             <td colSpan={7} className="bg-slate-50/80 p-0">
                                                                 <div className="px-14 py-4 space-y-2 border-b border-slate-100">
                                                                     {monthlyEntries.filter(e => item.ids.includes(e.categoryId) || (item.name === 'Uncategorized' && !knownCatIds.includes(e.categoryId))).sort((a,b) => (b.date||'').localeCompare(a.date||'')).map(entry => (
-                                                                        <div key={entry.id} className="flex justify-between items-center text-[11px] text-slate-600 pl-4 border-l-2 border-slate-200">
+                                                                        <div key={entry.id} className="flex justify-between items-center text-[11px] text-slate-600 pl-4 border-l-2 border-slate-200 group/entry">
                                                                             <div className="flex items-center gap-3">
                                                                                 <span className="text-slate-400 font-mono w-16">{entry.date?.split('-').slice(1).join('/') || entry.monthId}</span>
                                                                                 <div className="flex items-center gap-1.5">
@@ -607,7 +608,16 @@ export const MonthlyDashboard: React.FC<MonthlyDashboardProps> = ({ entries, bud
                                                                                     </AppTooltip>
                                                                                 )}
                                                                             </div>
-                                                                            <span className="font-bold text-slate-700">{formatCurrency(entry.amount, currency)}</span>
+                                                                            <div className="flex items-center gap-3">
+                                                                                <span className="font-bold text-slate-700">{formatCurrency(entry.amount, currency)}</span>
+                                                                                <button 
+                                                                                    onClick={(e) => { e.stopPropagation(); if(confirm('Delete this expense?')) onDeleteEntry(entry.id); }}
+                                                                                    className="p-1 text-slate-300 hover:text-red-500 opacity-0 group-hover/entry:opacity-100 transition-opacity"
+                                                                                    title="Delete Expense"
+                                                                                >
+                                                                                    <Trash2 size={12} />
+                                                                                </button>
+                                                                            </div>
                                                                         </div>
                                                                     ))}
                                                                 </div>
