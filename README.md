@@ -1,40 +1,73 @@
-# FairShare Finance Tracker (Self-Hosted)
+# FairShare - Couples Finance Tracker
 
-A privacy-focused, self-hosted finance tracker for couples. This application uses a local SQLite database to store your data, ensuring nothing leaves your network.
+A smart finance tracker designed for couples with separate incomes. It features dynamic split logic based on salary ratios, holiday project tracking, and wealth building insights.
 
-## Features
-- **Real Database:** Uses SQLite (`fairshare.db`) for persistent storage.
-- **Local Network Access:** Deploy once, access from phones and laptops on your WiFi.
-- **Privacy:** Data lives on your disk, not in a browser cache or the cloud.
+## 🔗 Live Demo
+Visit the live demo at: [fairshare.btopencloude.com](https://fairshare.btopencloude.com)
+*(Note: The demo uses Local Storage mode. Your data stays in your browser.)*
 
-## How to Run with Docker
+## ✨ Features
 
-1. **Build the Image**
-   ```bash
-   docker build -t fairshare .
-   ```
+- **Hybrid Storage**: Use it privately on your own server/NAS or publicly via Cloudflare.
+- **Dynamic Split**: Automatically calculates "Fair Share" contributions based on relative income.
+- **Trip Tracking**: Manage budgets for vacations and shared adventures.
+- **Budgeting & Savings**: Set goals and track monthly progress.
+- **Sankey Visualization**: Beautifully visualize money flow from income to categories.
 
-2. **Run the Container**
-   You need to mount a volume to persist the database file (`.db`) outside the container.
-   
-   ```bash
-   docker run -d \
-     -p 3000:3000 \
-     -v $(pwd)/data:/app/data \
-     --name fairshare-app \
-     fairshare
-   ```
+## 🚀 Storage Modes
 
-3. **Access the App**
-   - **On this computer:** Open [http://localhost:3000](http://localhost:3000)
-   - **On your Local Network:** Find your computer's local IP (e.g., `192.168.1.15`) and open `http://192.168.1.15:3000` on your phone.
+The app supports two modes via the `VITE_APP_MODE` environment variable:
 
-## Data Location
-Your database file will be created at `./data/fairshare.db` in the current folder. You can back up this file anytime.
+1.  **`LOCAL_FIRST`** (Default for Cloudflare/Public Demo): Uses `localStorage`. All your data is stored securely in your browser and never leaves your device.
+2.  **`SERVER_BASED`** (Default for Self-Hosting): Uses an Express + SQLite backend for persistent, multi-device storage.
 
-## Development
-To run locally without Docker:
+## 🐳 Docker Deployment (Self-Hosting / NAS)
 
-1. `npm install`
-2. `npm run dev` (Frontend)
-3. `npm start` (Backend - run in a separate terminal)
+Ideal for running on a Synology, QNAP, or any home server where you want your data to persist and be accessible across devices.
+
+1.  **Clone the repository**.
+2.  **Start the application**:
+    ```bash
+    docker-compose up -d
+    ```
+3.  Access the app at `http://localhost:3000` (or your server's IP).
+
+Your data is stored in the `./data/fairshare.db` SQLite database.
+
+## 🛠️ Development
+
+### Prerequisites
+
+- Node.js 20+
+- npm
+
+### Installation
+
+```bash
+npm install
+```
+
+### Running Locally
+
+```bash
+# Full stack (Frontend + Backend)
+npm run dev
+
+# Frontend only (Local Storage mode - no backend needed)
+npm run client:local
+```
+
+### Build for Production
+
+```bash
+# Build for Self-Hosting (Server-Based)
+npm run build
+npm start
+
+# Build for Cloudflare Pages (Local-First)
+npm run build:local
+```
+
+## 🔒 Privacy & Security
+
+FairShare is designed with privacy in mind. In `SERVER_BASED` mode, all data is stored in a local SQLite database that you control. In `LOCAL_FIRST` mode, data never leaves your browser.

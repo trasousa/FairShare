@@ -4,9 +4,11 @@
   "type": "module",
   "scripts": {
     "dev": "concurrently \"npm run server\" \"npm run client\"",
-    "client": "vite --host 0.0.0.0",
+    "client": "VITE_APP_MODE=SERVER_BASED vite --host 0.0.0.0",
+    "client:local": "VITE_APP_MODE=LOCAL_FIRST vite --host 0.0.0.0",
     "server": "node server.js",
-    "build": "vite build --debug",
+    "build": "VITE_APP_MODE=SERVER_BASED vite build",
+    "build:local": "VITE_APP_MODE=LOCAL_FIRST vite build",
     "start": "node server.js"
   },
   "dependencies": {

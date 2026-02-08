@@ -6,9 +6,36 @@ const generateId = () => Math.random().toString(36).substr(2, 9);
 
 const API_URL = '/api';
 
+// --- MODE CONFIGURATION ---
+const APP_MODE = import.meta.env.VITE_APP_MODE || 'SERVER_BASED';
+const IS_LOCAL_MODE = APP_MODE === 'LOCAL_FIRST';
+
+// --- LOCAL STORAGE HELPERS (for LOCAL_FIRST mode) ---
+const LS_KEYS = {
+    INSTANCES_INDEX: 'fs_instances_index',
+    INSTANCE_PREFIX: 'fs_instance_'
+};
+
+interface InstanceMetadata {
+    id: string;
+    name: string;
+    lastAccessed: number;
+    lastUpdated: number;
+}
+
+const getLocalIndex = (): InstanceMetadata[] => {
+    const data = localStorage.getItem(LS_KEYS.INSTANCES_INDEX);
+    return data ? JSON.parse(data) : [];
+};
+
+const saveLocalIndex = (index: InstanceMetadata[]) => {
+    localStorage.setItem(LS_KEYS.INSTANCES_INDEX, JSON.stringify(index));
+};
+
 // --- ASYNC API OPERATIONS ---
 
 export const checkBackendHealth = async (): Promise<boolean> => {
+    if (IS_LOCAL_MODE) return true;
     try {
         const response = await fetch(`${API_URL}/health`);
         return response.ok;
@@ -17,13 +44,20 @@ export const checkBackendHealth = async (): Promise<boolean> => {
     }
 };
 
-export const getInstances = async (): Promise<{ id: string, name: string, lastAccessed: number }[]> => {
+export const getInstances = async (): Promise<InstanceMetadata[]> => {
+    if (IS_LOCAL_MODE) {
+        return getLocalIndex().sort((a, b) => b.lastAccessed - a.lastAccessed);
+    }
     const response = await fetch(`${API_URL}/instances`);
     if (!response.ok) throw new Error(`Backend Error: ${response.statusText}`);
     return await response.json();
 };
 
 export const getInstance = async (id: string): Promise<AppInstance | null> => {
+    if (IS_LOCAL_MODE) {
+        const data = localStorage.getItem(`${LS_KEYS.INSTANCE_PREFIX}${id}`);
+        return data ? JSON.parse(data) : null;
+    }
     const response = await fetch(`${API_URL}/instance/${id}`);
     if (response.status === 404) return null;
     if (!response.ok) throw new Error(`Backend Error: ${response.statusText}`);
@@ -31,7 +65,39 @@ export const getInstance = async (id: string): Promise<AppInstance | null> => {
 };
 
 export const saveInstance = async (instance: AppInstance): Promise<{ lastUpdated: number }> => {
-    const updatedInstance = { ...instance, lastAccessed: Date.now() };
+    const now = Date.now();
+    const updatedInstance = { ...instance, lastAccessed: now, lastUpdated: now };
+
+    if (IS_LOCAL_MODE) {
+        // Check for conflict (simulated)
+        const existing = await getInstance(instance.id);
+        if (existing && instance.lastUpdated && existing.lastUpdated > instance.lastUpdated) {
+            throw { status: 409, error: "Conflict: A newer version exists. Please refresh.", serverLastUpdated: existing.lastUpdated };
+        }
+
+        // Save instance data
+        localStorage.setItem(`${LS_KEYS.INSTANCE_PREFIX}${instance.id}`, JSON.stringify(updatedInstance));
+
+        // Update index
+        const index = getLocalIndex();
+        const existingIdx = index.findIndex(i => i.id === instance.id);
+        const metadata: InstanceMetadata = {
+            id: instance.id,
+            name: instance.name,
+            lastAccessed: now,
+            lastUpdated: now
+        };
+
+        if (existingIdx >= 0) {
+            index[existingIdx] = metadata;
+        } else {
+            index.push(metadata);
+        }
+        saveLocalIndex(index);
+        
+        return { lastUpdated: now };
+    }
+
     const response = await fetch(`${API_URL}/instance`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
@@ -46,11 +112,25 @@ export const saveInstance = async (instance: AppInstance): Promise<{ lastUpdated
 };
 
 export const deleteInstance = async (id: string) => {
+    if (IS_LOCAL_MODE) {
+        localStorage.removeItem(`${LS_KEYS.INSTANCE_PREFIX}${id}`);
+        const index = getLocalIndex().filter(i => i.id !== id);
+        saveLocalIndex(index);
+        return;
+    }
     const response = await fetch(`${API_URL}/instance/${id}`, { method: 'DELETE' });
     if (!response.ok) throw new Error('Delete failed');
 };
 
 export const renameInstance = async (id: string, newName: string) => {
+    if (IS_LOCAL_MODE) {
+        const instance = await getInstance(id);
+        if (instance) {
+            instance.name = newName;
+            await saveInstance(instance);
+        }
+        return;
+    }
     const response = await fetch(`${API_URL}/instance/${id}/rename`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
@@ -62,17 +142,14 @@ export const renameInstance = async (id: string, newName: string) => {
 // --- FACTORY FUNCTIONS ---
 
 export const createDemoInstance = async (): Promise<AppInstance> => {
-    // Check if demo already exists to prevent overwriting user changes on reload
-    // We try/catch here specifically because we don't want to crash if checking existing fails, 
-    // but we DO want to crash if saving fails.
     try {
         const existing = await getInstance('demo');
         if (existing) {
-            await saveInstance(existing);
+            // In local mode, we might want to "refresh" the demo if it's too old or just keep it
+            // For now, keep it if it exists.
             return existing;
         }
     } catch (e) {
-        // Ignore read error, proceed to create
         console.warn("Could not check existing demo, attempting to create new one.");
     }
 
@@ -81,6 +158,7 @@ export const createDemoInstance = async (): Promise<AppInstance> => {
         name: 'Demo: Alex & Jordan',
         created: Date.now(),
         lastAccessed: Date.now(),
+        lastUpdated: Date.now(),
         currency: 'USD',
         users: USERS,
         data: {
@@ -127,6 +205,7 @@ export const createNewInstance = async (
         name,
         created: Date.now(),
         lastAccessed: Date.now(),
+        lastUpdated: Date.now(),
         currency,
         users,
         data: {

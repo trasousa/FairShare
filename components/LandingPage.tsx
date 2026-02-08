@@ -114,11 +114,14 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onSelectInstance, onCr
       }
   };
 
+  const APP_MODE = import.meta.env.VITE_APP_MODE || 'SERVER_BASED';
+  const IS_LOCAL_MODE = APP_MODE === 'LOCAL_FIRST';
+
   if (loading) {
-      return <div className="min-h-screen bg-slate-50 flex items-center justify-center text-slate-400">Loading Database...</div>;
+      return <div className="min-h-screen bg-slate-900 flex items-center justify-center text-slate-400">Loading...</div>;
   }
 
-  if (backendError) {
+  if (backendError && !IS_LOCAL_MODE) {
       return (
           <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-6 text-center">
               <div className="bg-white p-8 rounded-2xl shadow-xl max-w-md w-full border border-red-100">
@@ -274,8 +277,12 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onSelectInstance, onCr
                 </div>
             </div>
             
-            <div className="mt-16 text-center text-xs font-medium text-slate-600">
-                Data is stored locally in <code>./data/fairshare.db</code>
+            <div className="mt-16 text-center text-[10px] font-bold text-slate-600 uppercase tracking-widest">
+                {IS_LOCAL_MODE ? (
+                    <span>Data stored in Browser Storage (localStorage)</span>
+                ) : (
+                    <span>Data stored in <code>./data/fairshare.db</code></span>
+                )}
             </div>
         </div>
 
