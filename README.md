@@ -3,7 +3,7 @@
 A smart finance tracker designed for couples with separate incomes. It features dynamic split logic based on salary ratios, holiday project tracking, and wealth building insights.
 
 ## 🔗 Live Demo
-Visit the live demo at: [fairshare.btopencloude.com](https://fairshare.btopencloude.com)
+Visit the live demo at: [fairshare.btopencloude.com](https://fairshare.btopencloud.com)
 *(Note: The demo uses Local Storage mode. Your data stays in your browser.)*
 
 ## ✨ Features
