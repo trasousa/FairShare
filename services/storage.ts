@@ -1,8 +1,6 @@
 import { AppInstance, User, CurrencyCode, Category } from "../types";
 import { USERS, INITIAL_CATEGORIES, INITIAL_BUDGETS, INITIAL_SAVINGS, INITIAL_ENTRIES, INITIAL_TRIPS, INITIAL_INCOMES } from "../constants";
-
-// Helper to generate a unique ID
-const generateId = () => Math.random().toString(36).substr(2, 9);
+import { generateId } from "./utils";
 
 const API_URL = '/api';
 

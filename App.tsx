@@ -17,7 +17,7 @@ import {
   Calendar as CalendarIcon
 } from 'lucide-react';
 
-import { ExpenseEntry, AccountType, Budget, SavingsGoal, Category, TimeRange, Trip, IncomeEntry, User, UserId, AppInstance, CurrencyCode } from './types';
+import { ExpenseEntry, AccountType, Budget, SavingsGoal, Category, TimeRange, Trip, IncomeEntry, User, UserId, AppInstance, CurrencyCode, Suggestion } from './types';
 import { MonthlyWorksheet } from './components/MonthlyWorksheet';
 import { SingleEntryForm } from './components/SingleEntryForm';
 import { DashboardCharts } from './components/DashboardCharts';
@@ -30,6 +30,7 @@ import { MonthPicker } from './components/MonthPicker';
 import { ErrorBoundary } from './components/ErrorBoundary'; 
 import { getMonthLabel } from './services/financeService';
 import { getInstance, saveInstance } from './services/storage';
+import { generateId } from './services/utils';
 
 type MainTab = 'insights' | 'register' | 'planning' | 'settings';
 type RegisterView = 'worksheet' | 'single' | 'income';
@@ -51,6 +52,7 @@ function App({ instanceId, onExit }: AppProps) {
   const [instanceName, setInstanceName] = useState('');
   const [saveStatus, setSaveStatus] = useState<SaveStatus>('saved');
   const [lastUpdated, setLastUpdated] = useState<number>(0);
+  const [createdTimestamp, setCreatedTimestamp] = useState<number>(Date.now());
   
   // Navigation State
   const [activeMainTab, setActiveMainTab] = useState<MainTab>('insights');
@@ -119,6 +121,7 @@ function App({ instanceId, onExit }: AppProps) {
             setTrips(data.data.trips);
             setSuggestions(data.data.suggestions || []);
             setLastUpdated(data.lastUpdated || 0);
+            setCreatedTimestamp(data.created || Date.now());
             setLoading(false);
         } else {
             onExit(); // Instance not found
@@ -167,7 +170,7 @@ function App({ instanceId, onExit }: AppProps) {
               const updatedInstance: AppInstance = {
                   id: instanceId,
                   name: instanceName,
-                  created: Date.now(),
+                  created: createdTimestamp,
                   lastAccessed: Date.now(),
                   lastUpdated: lastUpdated,
                   currency: currency,
@@ -257,7 +260,7 @@ function App({ instanceId, onExit }: AppProps) {
   const handleAddSuggestion = (text: string) => {
       if (!text.trim()) return;
       const newSug: Suggestion = {
-          id: Math.random().toString(36).substr(2, 9),
+          id: generateId(),
           text: text.trim(),
           timestamp: Date.now()
       };
@@ -490,13 +493,13 @@ function App({ instanceId, onExit }: AppProps) {
                                       next[idx] = { ...next[idx], amount: needed, ...(tid !== undefined ? { tripId: tid ? [tid] : [] } : {}), ...(desc !== undefined ? { description: desc } : {}) }; 
                                       return next; 
                                   }
-                                  return [...prev, { id: Math.random().toString(36), monthId: currentMonth, categoryId: cid, account: acc, amount: needed, entryType: 'worksheet', tripId: tid ? [tid] : [], description: desc }];
+                                  return [...prev, { id: generateId(), monthId: currentMonth, categoryId: cid, account: acc, amount: needed, entryType: 'worksheet', tripId: tid ? [tid] : [], description: desc }];
                               });
                           }}
                           onAddCategory={(n, g, a) => {
                               setCategories(p => {
                                   if (p.some(c => c.name.toLowerCase() === n.toLowerCase() && c.group === g && c.defaultAccount === a)) return p;
-                                  return [...p, {id: n.toLowerCase().replace(/\s+/g, '_') + '_' + Math.random().toString(36).substr(2, 4), name: n, group: g as any, defaultAccount: a}];
+                                  return [...p, {id: n.toLowerCase().replace(/\s+/g, '_') + '_' + generateId().slice(0, 8), name: n, group: g as any, defaultAccount: a}];
                               });
                           }}
                           onEditCategory={(id, n) => {
@@ -522,10 +525,10 @@ function App({ instanceId, onExit }: AppProps) {
                         />
                     )}
                     {activeRegisterView === 'single' && (
-                        <div className="max-w-xl mx-auto"><SingleEntryForm categories={categories} trips={trips} currentMonth={currentMonth} users={users} currency={currency} theme={theme} getInputClass={getInputClass} onAddEntry={(e) => setEntries(p => [...p, { ...e, id: Math.random().toString(36) }])} /></div>
+                        <div className="max-w-xl mx-auto"><SingleEntryForm categories={categories} trips={trips} currentMonth={currentMonth} users={users} currency={currency} theme={theme} getInputClass={getInputClass} onAddEntry={(e) => setEntries(p => [...p, { ...e, id: generateId() }])} /></div>
                     )}
                     {activeRegisterView === 'income' && (
-                        <IncomeManager incomes={incomes} currentMonth={currentMonth} users={users} currency={currency} onAddIncome={(s, a, r, ir, mid) => setIncomes(p => [...p, {id: Math.random().toString(36), monthId: mid, source: s, amount: a, recipient: r, isRecurring: ir}])} onDeleteIncome={(id) => setIncomes(p => p.filter(i => i.id !== id))} />
+                        <IncomeManager incomes={incomes} currentMonth={currentMonth} users={users} currency={currency} onAddIncome={(s, a, r, ir, mid) => setIncomes(p => [...p, {id: generateId(), monthId: mid, source: s, amount: a, recipient: r, isRecurring: ir}])} onDeleteIncome={(id) => setIncomes(p => p.filter(i => i.id !== id))} />
                     )}
                 </div>
             )}
@@ -537,12 +540,23 @@ function App({ instanceId, onExit }: AppProps) {
                         <button onClick={() => setActivePlanningView('travel')} className={`flex-1 py-2 text-xs font-bold rounded-lg ${activePlanningView === 'travel' ? 'bg-indigo-600 text-white' : 'text-slate-500'}`}>Trips</button>
                     </div>
 
-                    {activePlanningView === 'travel' && <TravelDashboard users={users} trips={trips} entries={entries} currency={currency} onAddTrip={(t) => setTrips(p => [...p, { ...t, id: Math.random().toString(36) }])} onUpdateTrip={(updatedTrip) => setTrips(p => p.map(t => t.id === updatedTrip.id ? updatedTrip : t))} />}
+                    {activePlanningView === 'travel' && <TravelDashboard
+                        users={users} trips={trips} entries={entries} categories={categories} currency={currency}
+                        onAddTrip={(t) => setTrips(p => [...p, { ...t, id: generateId() }])}
+                        onUpdateTrip={(updatedTrip) => setTrips(p => p.map(t => t.id === updatedTrip.id ? updatedTrip : t))}
+                        onDeleteTrip={(tripId) => setTrips(p => p.filter(t => t.id !== tripId))}
+                        onAddEntry={(e) => setEntries(p => [...p, { ...e, id: generateId() }])}
+                        onNavigateToMonth={(monthId) => {
+                            setCurrentMonth(monthId);
+                            setActiveMainTab('insights');
+                            setActiveInsightsView('monthly');
+                        }}
+                    />}
                     
                     {activePlanningView === 'budget' && <BudgetManager budgets={budgets} categories={categories} savings={savings} entries={entries} totalIncome={currentTotalIncome} users={users} currency={currency} getInputClass={getInputClass}
                       onAddBudget={(cid, lim, acc) => setBudgets(p => [...p, { categoryId: cid, limit: lim, account: acc }])}
                       onAddGoal={(n, t, tt, i, acc, sd, td, pp) => {
-                          const gid = n.toLowerCase().replace(/\s+/g, '_') + '_' + Math.random().toString(36).substr(2, 4);
+                          const gid = n.toLowerCase().replace(/\s+/g, '_') + '_' + generateId().slice(0, 8);
                           setCategories(p => [...p, { id: gid, name: n, group: 'SAVINGS', defaultAccount: acc }]);
                           setSavings(p => [...p, { id: gid, name: n, targetAmount: t, targetType: tt, initialAmount: i, account: acc, startDate: sd, targetDate: td, projectionPeriod: pp }]);
                       }}

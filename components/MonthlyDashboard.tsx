@@ -28,15 +28,19 @@ export const MonthlyDashboard: React.FC<MonthlyDashboardProps> = ({ entries, bud
     entries.filter(e => e.monthId === currentMonth), 
   [entries, currentMonth]);
 
-  const monthlyIncomes = incomes.filter(i => i.monthId === currentMonth);
+  const monthlyIncomes = useMemo(() =>
+    incomes.filter(i => i.monthId === currentMonth),
+  [incomes, currentMonth]);
   
   const u1Income = users?.user_1?.monthlyIncome || 0;
   const u2Income = users?.user_2?.monthlyIncome || 0;
 
-  const incomeU1 = monthlyIncomes.filter(i => i.recipient === 'USER_1').reduce((sum, i) => sum + i.amount, 0) 
-                 || u1Income; 
-  const incomeU2 = monthlyIncomes.filter(i => i.recipient === 'USER_2').reduce((sum, i) => sum + i.amount, 0) 
-                 || u2Income; 
+  const incomeU1 = monthlyIncomes.filter(i => i.recipient === 'USER_1').length > 0
+                 ? monthlyIncomes.filter(i => i.recipient === 'USER_1').reduce((sum, i) => sum + i.amount, 0)
+                 : u1Income;
+  const incomeU2 = monthlyIncomes.filter(i => i.recipient === 'USER_2').length > 0
+                 ? monthlyIncomes.filter(i => i.recipient === 'USER_2').reduce((sum, i) => sum + i.amount, 0)
+                 : u2Income;
   const incomeShared = monthlyIncomes.filter(i => i.recipient === 'SHARED').reduce((sum, i) => sum + i.amount, 0);
 
   const totalIncome = incomeU1 + incomeU2 + incomeShared;
@@ -106,6 +110,8 @@ export const MonthlyDashboard: React.FC<MonthlyDashboardProps> = ({ entries, bud
   const user1Contribution = fairShareBase * user1Ratio;
   const user2Contribution = fairShareBase * (1 - user1Ratio);
 
+  const knownCatIds = useMemo(() => categories.map(c => c.id), [categories]);
+
   const groupedBreakdown = useMemo(() => {
     const filteredEntries = filterAccount === 'ALL' 
         ? monthlyEntries 
@@ -163,8 +169,8 @@ export const MonthlyDashboard: React.FC<MonthlyDashboardProps> = ({ entries, bud
     });
 
     // Handle Uncategorized
-    const knownCatIds = categories.map(c => c.id);
-    const uncategorizedEntries = filteredEntries.filter(e => !knownCatIds.includes(e.categoryId));
+    const knownIds = categories.map(c => c.id);
+    const uncategorizedEntries = filteredEntries.filter(e => !knownIds.includes(e.categoryId));
     if (uncategorizedEntries.length > 0) {
         const uGroup = 'OTHER';
         if (!groups[uGroup]) {

@@ -135,10 +135,10 @@ const generateHistory = (): ExpenseEntry[] => {
       account: 'SHARED',
       description: 'Mountain Cabin',
       entryType: 'single',
-      tripId: 't2',
+      tripId: ['t2'],
       tripCategory: 'ACCOMMODATION'
   });
-  
+
   history.push({
       id: 'travel-exp-2',
       monthId: '2025-02',
@@ -147,7 +147,7 @@ const generateHistory = (): ExpenseEntry[] => {
       account: 'SHARED',
       description: 'Gas & Tolls',
       entryType: 'single',
-      tripId: 't2',
+      tripId: ['t2'],
       tripCategory: 'FLIGHT' // Using FLIGHT map for transport
   });
 

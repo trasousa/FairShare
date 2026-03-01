@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Category, ExpenseEntry, AccountType, Budget, Trip, CurrencyCode, SavingsGoal, User } from '../types';
 import { formatCurrency } from '../services/financeService';
+import { safeEval } from '../services/mathEval';
 import { AlertCircle, Plus, Edit2, Check, X, Plane, TrendingUp, MessageSquare, Trash2, GripVertical, Settings2 } from 'lucide-react';
 
 interface MonthlyWorksheetProps {
@@ -35,15 +36,7 @@ const MoneyInput = ({ value, onChange, onDescriptionChange, description, color, 
     }
   }, [value]);
 
-  const evaluate = (expression: string): number => {
-      try {
-          if (!/^[\d\+\-\*\/\.\(\)\s]+$/.test(expression)) return parseFloat(expression) || 0;
-          const result = new Function('return ' + expression)();
-          return isFinite(result) ? Number(result.toFixed(2)) : 0;
-      } catch (e) {
-          return 0;
-      }
-  };
+  const evaluate = (expression: string): number => safeEval(expression);
 
   const handleBlur = () => {
       const result = evaluate(localValue);
@@ -314,11 +307,11 @@ export const MonthlyWorksheet: React.FC<MonthlyWorksheetProps> = ({ entries, bud
 
     const isCollapsed = collapsedSections[title];
 
-    // Calculate Section Totals - Summing everything registered to these categories in this month
+    // Calculate Section Totals - Sum across all category IDs in each name group
     const sectionTotals = {
-        shared: nameOrder.reduce((sum, name) => sum + getAmount(groupedByName[name][0].id, 'SHARED'), 0),
-        u1: nameOrder.reduce((sum, name) => sum + getAmount(groupedByName[name][0].id, 'USER_1'), 0),
-        u2: nameOrder.reduce((sum, name) => sum + getAmount(groupedByName[name][0].id, 'USER_2'), 0),
+        shared: nameOrder.reduce((sum, name) => sum + groupedByName[name].reduce((s, cat) => s + getAmount(cat.id, 'SHARED'), 0), 0),
+        u1: nameOrder.reduce((sum, name) => sum + groupedByName[name].reduce((s, cat) => s + getAmount(cat.id, 'USER_1'), 0), 0),
+        u2: nameOrder.reduce((sum, name) => sum + groupedByName[name].reduce((s, cat) => s + getAmount(cat.id, 'USER_2'), 0), 0),
     };
 
     return (
