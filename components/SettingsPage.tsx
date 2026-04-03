@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
-import { User, UserId, CurrencyCode } from '../types';
-import { Save, User as UserIcon, Upload, RotateCcw, Download, Database, Sun, Moon, LogOut, Users } from 'lucide-react';
+import React, { useState, useRef, useEffect } from 'react';
+import { User, UserId, CurrencyCode, ExpenseEntry, Category, Trip } from '../types';
+import { Save, User as UserIcon, Upload, RotateCcw, Download, Database, Sun, Moon, LogOut, Users, Table, AlertTriangle, Sparkles, Eye, EyeOff, CheckCircle2 } from 'lucide-react';
+import { DataExplorer } from './DataExplorer';
 
 interface SettingsPageProps {
   instanceName: string;
@@ -8,19 +9,93 @@ interface SettingsPageProps {
   currency: CurrencyCode;
   theme?: 'light' | 'dark';
   getInputClass: (isInput?: boolean) => string;
+  entries: ExpenseEntry[];
+  categories: Category[];
+  trips: Trip[];
   onUpdateInstanceName: (newName: string) => void;
   onUpdateUser: (id: UserId, data: Partial<User>) => void;
   onUpdateCurrency: (c: CurrencyCode) => void;
   onUpdateTheme: (t: 'light' | 'dark') => void;
   onExport: () => void;
+  onImportReplace: (data: any) => void;
+  onDeleteEntry: (id: string) => void;
+  onDeleteOrphans: () => void;
+  onDeleteZeros: () => void;
   onExit: () => void;
 }
 
-export const SettingsPage: React.FC<SettingsPageProps> = ({ instanceName, users, currency, theme = 'light', getInputClass, onUpdateInstanceName, onUpdateUser, onUpdateCurrency, onUpdateTheme, onExport, onExit }) => {
+export const SettingsPage: React.FC<SettingsPageProps> = ({
+  instanceName, users, currency, theme = 'light', getInputClass,
+  entries, categories, trips,
+  onUpdateInstanceName, onUpdateUser, onUpdateCurrency, onUpdateTheme,
+  onExport, onImportReplace, onDeleteEntry, onDeleteOrphans, onDeleteZeros, onExit
+}) => {
   const [localUsers, setLocalUsers] = useState(users);
   const [localInstanceName, setLocalInstanceName] = useState(instanceName);
   const [successMsg, setSuccessMsg] = useState('');
   const [activePicker, setActivePicker] = useState<UserId | null>(null);
+  const [activeTab, setActiveTab] = useState<'settings' | 'data'>('settings');
+  const [importError, setImportError] = useState('');
+  const [importConfirm, setImportConfirm] = useState<any>(null);
+  const importRef = useRef<HTMLInputElement>(null);
+
+  // AI config state
+  const [aiProvider, setAiProvider] = useState('gemini');
+  const [aiModel, setAiModel] = useState('gemini-2.0-flash');
+  const [aiApiKey, setAiApiKey] = useState('');
+  const [aiBaseUrl, setAiBaseUrl] = useState('https://api.openai.com/v1');
+  const [aiKeyHint, setAiKeyHint] = useState('');
+  const [showApiKey, setShowApiKey] = useState(false);
+  const [aiSaveStatus, setAiSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
+
+  useEffect(() => {
+    fetch('/api/config/ai').then(r => r.json()).then(cfg => {
+      setAiProvider(cfg.provider || 'gemini');
+      setAiModel(cfg.model || 'gemini-2.0-flash');
+      setAiBaseUrl(cfg.baseUrl || 'https://api.openai.com/v1');
+      setAiKeyHint(cfg.apiKeyHint || '');
+    }).catch(() => {});
+  }, []);
+
+  const handleSaveAiConfig = async () => {
+    setAiSaveStatus('saving');
+    try {
+      const body: any = { provider: aiProvider, model: aiModel, baseUrl: aiBaseUrl };
+      if (aiApiKey) body.apiKey = aiApiKey;
+      const res = await fetch('/api/config/ai', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      if (!res.ok) throw new Error('Failed');
+      const data = await res.json();
+      setAiKeyHint(aiApiKey ? `${aiApiKey.slice(0, 4)}…${aiApiKey.slice(-4)}` : data.apiKeyHint || '');
+      setAiApiKey('');
+      setAiSaveStatus('saved');
+      setTimeout(() => setAiSaveStatus('idle'), 2500);
+    } catch {
+      setAiSaveStatus('error');
+      setTimeout(() => setAiSaveStatus('idle'), 3000);
+    }
+  };
+
+  const handleImportFile = (file: File) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const parsed = JSON.parse(e.target?.result as string);
+        if (!parsed.data?.entries || !parsed.users) {
+          setImportError('Invalid FairShare backup file — missing required fields.');
+          return;
+        }
+        setImportError('');
+        setImportConfirm(parsed);
+      } catch {
+        setImportError('Failed to parse file. Make sure it\'s a valid FairShare JSON export.');
+      }
+    };
+    reader.readAsText(file);
+  };
 
   const PRESET_COLORS = ['#64748b', '#ef4444', '#f97316', '#f59e0b', '#10b981', '#14b8a6', '#06b6d4', '#3b82f6', '#6366f1', '#8b5cf6', '#a855f7', '#d946ef', '#ec4899', '#f43f5e'];
 
@@ -127,12 +202,12 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ instanceName, users,
   };
 
   return (
-    <div className="max-w-4xl mx-auto space-y-8">
-        
+    <div className="max-w-5xl mx-auto space-y-6">
+
         <div className="flex justify-between items-center">
              <div>
-                <h2 className="text-2xl font-bold text-slate-800">Settings & Preferences</h2>
-                <p className="text-slate-500">Manage profiles, currency, and data.</p>
+                <h2 className="text-2xl font-bold text-slate-800">Settings & Data</h2>
+                <p className="text-slate-500">Manage profiles, currency, and explore your data.</p>
              </div>
              {successMsg && (
                  <div className="bg-emerald-100 text-emerald-700 px-4 py-2 rounded-lg text-sm font-bold animate-in fade-in slide-in-from-top-2">
@@ -140,6 +215,38 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ instanceName, users,
                  </div>
              )}
         </div>
+
+        {/* Tab bar */}
+        <div className="flex gap-1 border-b border-slate-200">
+            <button
+                onClick={() => setActiveTab('settings')}
+                className={`flex items-center gap-2 px-4 py-2.5 text-sm font-bold border-b-2 transition -mb-px ${activeTab === 'settings' ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-slate-500 hover:text-slate-700'}`}
+            >
+                <Database size={16} /> Settings
+            </button>
+            <button
+                onClick={() => setActiveTab('data')}
+                className={`flex items-center gap-2 px-4 py-2.5 text-sm font-bold border-b-2 transition -mb-px ${activeTab === 'data' ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-slate-500 hover:text-slate-700'}`}
+            >
+                <Table size={16} /> Data Explorer
+            </button>
+        </div>
+
+        {activeTab === 'data' && (
+            <DataExplorer
+                entries={entries}
+                categories={categories}
+                trips={trips}
+                currency={currency}
+                users={users}
+                theme={theme}
+                onDeleteEntry={onDeleteEntry}
+                onDeleteOrphans={onDeleteOrphans}
+                onDeleteZeros={onDeleteZeros}
+            />
+        )}
+
+        {activeTab === 'settings' && <>
 
         {/* General App Settings */}
         <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
@@ -189,18 +296,116 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ instanceName, users,
                      </div>
                  </div>
 
-                 <div className="md:col-span-2 flex flex-col items-end gap-2">
-                     <button 
-                        onClick={onExport}
-                        className="flex items-center gap-2 border border-slate-300 text-slate-700 px-4 py-2.5 rounded-lg text-sm font-medium hover:bg-slate-50 transition"
-                     >
-                         <Download size={16}/> Export Database (JSON)
-                     </button>
-                     <span className="text-[10px] text-slate-400">
-                        To save to Google Drive, download the JSON file and upload it to your Drive folder.
-                     </span>
+                 <div className="md:col-span-2 space-y-3">
+                     <div className="flex flex-wrap gap-3 items-start">
+                         <button
+                            onClick={onExport}
+                            className="flex items-center gap-2 border border-slate-300 text-slate-700 px-4 py-2.5 rounded-lg text-sm font-medium hover:bg-slate-50 transition"
+                         >
+                             <Download size={16}/> Export Backup (JSON)
+                         </button>
+                         <label className="flex items-center gap-2 border border-indigo-200 bg-indigo-50 text-indigo-700 px-4 py-2.5 rounded-lg text-sm font-medium hover:bg-indigo-100 transition cursor-pointer">
+                             <Upload size={16}/> Import & Replace Data
+                             <input
+                                 ref={importRef}
+                                 type="file"
+                                 accept=".json"
+                                 className="hidden"
+                                 onChange={e => e.target.files?.[0] && handleImportFile(e.target.files[0])}
+                             />
+                         </label>
+                     </div>
+                     {importError && (
+                         <div className="flex items-center gap-2 bg-red-50 border border-red-200 text-red-700 text-xs rounded-lg px-3 py-2">
+                             <AlertTriangle size={14} /> {importError}
+                         </div>
+                     )}
+                     {importConfirm && (
+                         <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 space-y-3">
+                             <p className="text-sm font-bold text-amber-800 flex items-center gap-2">
+                                 <AlertTriangle size={16} /> Replace all current data?
+                             </p>
+                             <p className="text-xs text-amber-700">
+                                 This will load <strong>{importConfirm.name}</strong> ({importConfirm.data?.entries?.length ?? 0} entries, {importConfirm.data?.trips?.length ?? 0} trips). Your current data will be overwritten and saved.
+                             </p>
+                             <div className="flex gap-2">
+                                 <button
+                                     onClick={() => { onImportReplace(importConfirm); setImportConfirm(null); setSuccessMsg('Data imported successfully!'); setTimeout(() => setSuccessMsg(''), 3000); }}
+                                     className="text-xs font-bold bg-amber-600 text-white px-4 py-2 rounded-lg hover:bg-amber-700 transition"
+                                 >
+                                     Yes, Replace
+                                 </button>
+                                 <button onClick={() => { setImportConfirm(null); if (importRef.current) importRef.current.value = ''; }} className="text-xs font-bold border border-slate-200 px-4 py-2 rounded-lg hover:bg-slate-50 transition">
+                                     Cancel
+                                 </button>
+                             </div>
+                         </div>
+                     )}
+                     <span className="text-[10px] text-slate-400 block">Export your data as a JSON backup. Use Import to restore from a backup file — this replaces all current data.</span>
                  </div>
              </div>
+        </div>
+
+        {/* AI Configuration */}
+        <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
+            <h3 className="font-bold text-slate-800 mb-4 flex items-center gap-2">
+                <Sparkles size={18} className="text-indigo-500"/> AI Configuration
+            </h3>
+            <p className="text-xs text-slate-500 mb-4">Configure the AI assistant. Your API key is stored in server memory only — it resets on server restart. Use an <code className="bg-slate-100 px-1 rounded">.env</code> file to persist it.</p>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">Provider</label>
+                    <div className="flex bg-slate-100 rounded-lg p-1 w-fit">
+                        {['gemini', 'openai'].map(p => (
+                            <button key={p} onClick={() => {
+                                setAiProvider(p);
+                                if (p === 'gemini') setAiModel('gemini-2.0-flash');
+                                else setAiModel('gpt-4o-mini');
+                            }} className={`px-4 py-2 text-sm font-bold rounded-md transition capitalize ${aiProvider === p ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>
+                                {p === 'gemini' ? 'Gemini' : 'OpenAI-compat'}
+                            </button>
+                        ))}
+                    </div>
+                </div>
+                <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">Model</label>
+                    <input type="text" value={aiModel} onChange={e => setAiModel(e.target.value)} className={getInputClass()} placeholder="e.g. gemini-2.0-flash" />
+                </div>
+                {aiProvider !== 'gemini' && (
+                    <div className="md:col-span-2">
+                        <label className="block text-sm font-medium text-slate-700 mb-1">Base URL</label>
+                        <input type="text" value={aiBaseUrl} onChange={e => setAiBaseUrl(e.target.value)} className={getInputClass()} placeholder="https://api.openai.com/v1" />
+                    </div>
+                )}
+                <div className="md:col-span-2">
+                    <label className="block text-sm font-medium text-slate-700 mb-1">
+                        API Key {aiKeyHint && <span className="text-xs text-slate-400 font-normal ml-1">current: {aiKeyHint}</span>}
+                    </label>
+                    <div className="relative">
+                        <input
+                            type={showApiKey ? 'text' : 'password'}
+                            value={aiApiKey}
+                            onChange={e => setAiApiKey(e.target.value)}
+                            className={`${getInputClass()} pr-10`}
+                            placeholder={aiKeyHint ? 'Enter new key to replace…' : 'Paste your API key…'}
+                        />
+                        <button type="button" onClick={() => setShowApiKey(v => !v)} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600">
+                            {showApiKey ? <EyeOff size={16} /> : <Eye size={16} />}
+                        </button>
+                    </div>
+                </div>
+            </div>
+            <div className="mt-4 flex items-center gap-3">
+                <button
+                    onClick={handleSaveAiConfig}
+                    disabled={aiSaveStatus === 'saving'}
+                    className="flex items-center gap-2 bg-indigo-600 text-white px-4 py-2.5 rounded-lg text-sm font-bold hover:bg-indigo-700 transition disabled:opacity-60"
+                >
+                    {aiSaveStatus === 'saving' ? 'Saving…' : <><Sparkles size={14} /> Save AI Config</>}
+                </button>
+                {aiSaveStatus === 'saved' && <span className="flex items-center gap-1.5 text-sm text-emerald-600 font-medium"><CheckCircle2 size={15} /> Saved!</span>}
+                {aiSaveStatus === 'error' && <span className="text-sm text-red-600 font-medium">Save failed</span>}
+            </div>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
@@ -339,20 +544,21 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ instanceName, users,
         </div>
 
         <div className="flex items-center justify-between border-t border-slate-200 pt-6">
-            <button 
+            <button
                 onClick={handleSave}
                 className="flex items-center gap-2 bg-slate-900 text-white px-6 py-3 rounded-xl font-bold hover:bg-slate-800 transition shadow-lg shadow-slate-900/20"
             >
                 <Save size={18} /> Save Changes
             </button>
 
-            <button 
+            <button
                 onClick={onExit}
                 className="flex items-center gap-2 border border-red-200 text-red-600 px-6 py-3 rounded-xl font-bold hover:bg-red-50 transition"
             >
                 <LogOut size={18} /> Exit Instance
             </button>
         </div>
+        </>}
     </div>
   );
 };

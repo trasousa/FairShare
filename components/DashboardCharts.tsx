@@ -200,7 +200,7 @@ export const DashboardCharts: React.FC<DashboardChartsProps> = ({ entries, categ
   const tripsBarData = useMemo(() => {
       const data = Array.from(allMonths).sort().map(month => {
           const amount = filteredEntries
-              .filter(e => e.monthId === month && e.tripId)
+              .filter(e => e.monthId === month && e.tripId && (Array.isArray(e.tripId) ? e.tripId.length > 0 : !!e.tripId))
               .reduce((sum, e) => sum + e.amount, 0);
           return { month, amount };
       });

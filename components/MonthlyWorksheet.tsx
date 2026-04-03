@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Category, ExpenseEntry, AccountType, Budget, Trip, CurrencyCode, SavingsGoal, User } from '../types';
 import { formatCurrency } from '../services/financeService';
 import { safeEval } from '../services/mathEval';
+import { entryHasTrip, entryHasNoTrip, normalizeTripId } from '../services/utils';
 import { AlertCircle, Plus, Edit2, Check, X, Plane, TrendingUp, MessageSquare, Trash2, GripVertical, Settings2 } from 'lucide-react';
 
 interface MonthlyWorksheetProps {
@@ -134,12 +135,12 @@ export const MonthlyWorksheet: React.FC<MonthlyWorksheetProps> = ({ entries, bud
 
   const getAmount = (catId: string, account: AccountType, tripId?: string) => {
     return entries
-        .filter(e => e.categoryId === catId && e.account === account && e.monthId === monthId && (tripId ? e.tripId?.includes(tripId) : (!e.tripId || e.tripId.length === 0)))
+        .filter(e => e.categoryId === catId && e.account === account && e.monthId === monthId && (tripId ? entryHasTrip(e.tripId, tripId) : entryHasNoTrip(e.tripId)))
         .reduce((sum, e) => sum + e.amount, 0);
   };
 
   const getDescription = (catId: string, account: AccountType, tripId?: string) => {
-      const entry = entries.find(e => e.categoryId === catId && e.account === account && e.monthId === monthId && e.entryType === 'worksheet' && (tripId ? e.tripId?.includes(tripId) : (!e.tripId || e.tripId.length === 0)));
+      const entry = entries.find(e => e.categoryId === catId && e.account === account && e.monthId === monthId && e.entryType === 'worksheet' && (tripId ? entryHasTrip(e.tripId, tripId) : entryHasNoTrip(e.tripId)));
       return entry?.description || '';
   };
 
@@ -346,7 +347,7 @@ export const MonthlyWorksheet: React.FC<MonthlyWorksheetProps> = ({ entries, bud
                 const primaryCat = catsWithName[0];
 
                 if (isTravelSection) {
-                    const involvedTripIds = [...new Set(entries.filter(e => catsWithName.some(c => c.id === e.categoryId) && e.monthId === monthId && e.tripId && e.tripId.length > 0).flatMap(e => e.tripId || []))];
+                    const involvedTripIds = [...new Set(entries.filter(e => catsWithName.some(c => c.id === e.categoryId) && e.monthId === monthId && !entryHasNoTrip(e.tripId)).flatMap(e => normalizeTripId(e.tripId)))];
                     
                     return (
                         <div key={name} className="space-y-1">

@@ -8,17 +8,19 @@ interface BudgetManagerProps {
   categories: Category[];
   savings: SavingsGoal[];
   entries: ExpenseEntry[];
+  incomes: import('../types').IncomeEntry[];
   totalIncome: number;
   users: Record<string, User>;
   currency: CurrencyCode;
   getInputClass: (isInput?: boolean) => string;
   onAddBudget: (categoryId: string, limit: number, account: AccountType) => void;
+  onDeleteBudget: (categoryId: string, account: AccountType) => void;
   onAddGoal: (name: string, target: number, targetType: 'FIXED'|'PERCENTAGE', initial: number, account: AccountType, startDate?: string, targetDate?: string, projectionPeriod?: 'MONTHLY'|'ANNUAL') => void;
   onUpdateGoal: (goal: SavingsGoal) => void;
   onDeleteGoal: (id: string) => void;
 }
 
-export const BudgetManager: React.FC<BudgetManagerProps> = ({ budgets, categories, savings, entries, totalIncome, users, currency, getInputClass, onAddBudget, onAddGoal, onUpdateGoal, onDeleteGoal }) => {
+export const BudgetManager: React.FC<BudgetManagerProps> = ({ budgets, categories, savings, entries, incomes, totalIncome, users, currency, getInputClass, onAddBudget, onDeleteBudget, onAddGoal, onUpdateGoal, onDeleteGoal }) => {
   const [activeTab, setActiveTab] = useState<'BUDGETS' | 'GOALS'>('BUDGETS');
   const [isAdding, setIsAdding] = useState(false);
   const [editingGoal, setEditingGoal] = useState<SavingsGoal | null>(null);
@@ -85,10 +87,29 @@ export const BudgetManager: React.FC<BudgetManagerProps> = ({ budgets, categorie
                   {accountBudgets.length === 0 && <p className="text-sm text-slate-400 italic text-center py-2">No budgets set.</p>}
                   {accountBudgets.map(b => {
                       const cat = categories.find(c => c.id === b.categoryId);
+                      const spent = entries.filter(e => e.categoryId === b.categoryId && e.account === b.account).reduce((s, e) => s + e.amount, 0);
+                      const pct = b.limit > 0 ? Math.min((spent / b.limit) * 100, 100) : 0;
+                      const over = spent > b.limit && b.limit > 0;
                       return (
-                          <div key={b.categoryId} className="flex justify-between items-center py-2 border-b border-slate-50 last:border-0 hover:bg-slate-50 px-2 rounded-lg transition">
-                              <span className="text-sm font-medium text-slate-700">{cat?.name}</span>
-                              <span className="text-sm font-bold text-slate-600">{formatCurrency(b.limit, currency)}</span>
+                          <div key={b.categoryId + b.account} className="py-2 border-b border-slate-50 last:border-0 hover:bg-slate-50 px-2 rounded-lg transition group">
+                              <div className="flex justify-between items-center mb-1">
+                                  <span className="text-sm font-medium text-slate-700">{cat?.name}</span>
+                                  <div className="flex items-center gap-2">
+                                      <span className={`text-sm font-bold ${over ? 'text-red-600' : 'text-slate-600'}`}>
+                                          {formatCurrency(spent, currency)} / {formatCurrency(b.limit, currency)}
+                                      </span>
+                                      <button
+                                          onClick={() => confirm(`Remove budget for "${cat?.name}"?`) && onDeleteBudget(b.categoryId, b.account)}
+                                          className="opacity-0 group-hover:opacity-100 p-1 text-slate-300 hover:text-red-500 transition rounded"
+                                          title="Remove budget"
+                                      >
+                                          <Trash2 size={13} />
+                                      </button>
+                                  </div>
+                              </div>
+                              <div className="w-full bg-slate-100 h-1.5 rounded-full overflow-hidden">
+                                  <div className={`h-full rounded-full transition-all ${over ? 'bg-red-500' : 'bg-indigo-400'}`} style={{ width: `${pct}%` }} />
+                              </div>
                           </div>
                       );
                   })}
@@ -149,9 +170,17 @@ export const BudgetManager: React.FC<BudgetManagerProps> = ({ budgets, categorie
 
   const renderGoalCard = (goal: SavingsGoal) => {
       const current = getGoalProgress(goal);
-      const baseIncome = goal.projectionPeriod === 'ANNUAL' ? totalIncome * 12 : totalIncome;
-      const targetVal = goal.targetType === 'PERCENTAGE' 
-        ? baseIncome * (goal.targetAmount / 100) 
+      // For percentage goals: use total income from all recorded income entries
+      // falling back to the passed totalIncome (current month) only if no entries exist
+      const allIncomeTotal = incomes.reduce((s, i) => s + i.amount, 0);
+      const effectiveMonthlyIncome = allIncomeTotal > 0
+          ? allIncomeTotal / Math.max(new Set(incomes.map(i => i.monthId)).size, 1)
+          : totalIncome;
+      const baseIncome = goal.projectionPeriod === 'ANNUAL'
+          ? effectiveMonthlyIncome * 12
+          : effectiveMonthlyIncome;
+      const targetVal = goal.targetType === 'PERCENTAGE'
+        ? baseIncome * (goal.targetAmount / 100)
         : goal.targetAmount;
         
       const progress = targetVal > 0 ? Math.min((current / targetVal) * 100, 100) : 0;
@@ -316,9 +345,12 @@ export const BudgetManager: React.FC<BudgetManagerProps> = ({ budgets, categorie
                                     </div>
                                 )}
                              </div>
-                             {goalType === 'PERCENTAGE' && goalTarget && (
-                                 <p className="text-[10px] text-slate-400 mt-1">Approx. {formatCurrency((goalProjection === 'ANNUAL' ? totalIncome * 12 : totalIncome) * (parseFloat(goalTarget)/100), currency)} based on {goalProjection === 'ANNUAL' ? 'annual' : 'monthly'} income.</p>
-                             )}
+                             {goalType === 'PERCENTAGE' && goalTarget && (() => {
+                                 const allInc = incomes.reduce((s, i) => s + i.amount, 0);
+                                 const effMonthly = allInc > 0 ? allInc / Math.max(new Set(incomes.map(i => i.monthId)).size, 1) : totalIncome;
+                                 const base = goalProjection === 'ANNUAL' ? effMonthly * 12 : effMonthly;
+                                 return <p className="text-[10px] text-slate-400 mt-1">Approx. {formatCurrency(base * (parseFloat(goalTarget)/100), currency)} based on {goalProjection === 'ANNUAL' ? 'annual' : 'monthly'} income.</p>;
+                             })()}
                         </div>
 
                         <div>

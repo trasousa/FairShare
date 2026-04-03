@@ -1,8 +1,8 @@
 import React, { useState, useMemo } from 'react';
 import { Trip, ExpenseEntry, CurrencyCode, User, AccountType, Category } from '../types';
 import { formatCurrency } from '../services/financeService';
-import { generateId } from '../services/utils';
-import { Plane, MapPin, Plus, Calendar, AlertCircle, Edit2, Layers, ChevronDown, ChevronUp, Trash2, PieChart } from 'lucide-react';
+import { generateId, entryHasTrip } from '../services/utils';
+import { Plane, MapPin, Plus, Calendar, AlertCircle, Edit2, Layers, ChevronDown, ChevronUp, Trash2, PieChart, Receipt } from 'lucide-react';
 
 interface TravelDashboardProps {
   trips: Trip[];
@@ -20,10 +20,11 @@ interface TravelDashboardProps {
 export const TravelDashboard: React.FC<TravelDashboardProps> = ({ trips, entries, categories, currency, users, onAddTrip, onUpdateTrip, onDeleteTrip, onAddEntry, onNavigateToMonth }) => {
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingTrip, setEditingTrip] = useState<Trip | null>(null);
-  const [newTrip, setNewTrip] = useState<Partial<Trip>>({ status: 'PLANNED', account: 'SHARED' });
+  const [newTrip, setNewTrip] = useState<Partial<Trip>>({ status: 'PLANNED', account: 'SHARED', budget: 0 });
   const [selectedYear, setSelectedYear] = useState('All');
   const [expandedDestination, setExpandedDestination] = useState<string | null>(null);
   const [addingExpenseTripId, setAddingExpenseTripId] = useState<string | null>(null);
+  const [expandedExpensesTripId, setExpandedExpensesTripId] = useState<string | null>(null);
 
   // Expense form state
   const [expenseAmount, setExpenseAmount] = useState('');
@@ -57,7 +58,7 @@ export const TravelDashboard: React.FC<TravelDashboardProps> = ({ trips, entries
       return groups;
   }, [filteredTrips]);
 
-  const getTripExpenses = (tripId: string) => entries.filter(e => e.tripId?.includes(tripId));
+  const getTripExpenses = (tripId: string) => entries.filter(e => entryHasTrip(e.tripId, tripId));
   const getTripTotal = (tripId: string) => getTripExpenses(tripId).reduce((sum, e) => sum + e.amount, 0);
 
   const handleEdit = (trip: Trip) => {
@@ -76,15 +77,16 @@ export const TravelDashboard: React.FC<TravelDashboardProps> = ({ trips, entries
 
   const handleSubmit = (e: React.FormEvent) => {
       e.preventDefault();
-      if(newTrip.name && newTrip.destination && newTrip.startDate && newTrip.budget) {
+      if(newTrip.name && newTrip.destination && newTrip.startDate && newTrip.budget !== undefined && newTrip.budget >= 0) {
+          const tripData = { ...newTrip, account: newTrip.account || 'SHARED', budget: Number(newTrip.budget) || 0 };
           if (editingTrip && newTrip.id) {
-              onUpdateTrip(newTrip as Trip);
+              onUpdateTrip(tripData as Trip);
           } else {
-              onAddTrip(newTrip as Omit<Trip, 'id'>);
+              onAddTrip(tripData as Omit<Trip, 'id'>);
           }
           setIsFormOpen(false);
           setEditingTrip(null);
-          setNewTrip({ status: 'PLANNED' });
+          setNewTrip({ status: 'PLANNED', account: 'SHARED', budget: 0 });
       }
   };
 
@@ -191,20 +193,59 @@ export const TravelDashboard: React.FC<TravelDashboardProps> = ({ trips, entries
                     {isOver && <div className="flex items-center gap-1 text-xs text-red-500 mt-1"><AlertCircle size={10}/> Over Budget</div>}
                 </div>
 
-                <div className="space-y-2">
+                {/* Category Breakdown Summary */}
+                <div className="space-y-1.5">
                     <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Breakdown</p>
                     {['FLIGHT', 'ACCOMMODATION', 'FOOD', 'ACTIVITY', 'OTHER'].map(cat => {
                         const catTotal = expenses.filter(e => e.tripCategory === cat).reduce((s, e) => s + e.amount, 0);
                         if(catTotal === 0) return null;
+                        const catIcons: Record<string, string> = { FLIGHT: '✈️', ACCOMMODATION: '🏨', FOOD: '🍽️', ACTIVITY: '🎯', OTHER: '📦' };
                         return (
                             <div key={cat} className="flex justify-between text-xs text-slate-600 border-b border-slate-50 pb-1 last:border-0">
-                                <span className="capitalize">{cat.toLowerCase()}</span>
+                                <span className="capitalize">{catIcons[cat]} {cat.toLowerCase()}</span>
                                 <span className="font-medium">{formatCurrency(catTotal, currency)}</span>
                             </div>
                         )
                     })}
                     {expenses.length === 0 && <p className="text-xs text-slate-400 italic">No expenses recorded yet.</p>}
                 </div>
+
+                {/* Expandable Individual Expense List */}
+                {expenses.length > 0 && (
+                    <div>
+                        <button
+                            onClick={() => setExpandedExpensesTripId(expandedExpensesTripId === trip.id ? null : trip.id)}
+                            className="flex items-center gap-1 text-xs text-indigo-500 hover:text-indigo-700 font-medium transition"
+                        >
+                            <Receipt size={12} />
+                            {expandedExpensesTripId === trip.id ? 'Hide' : 'Show'} {expenses.length} expense{expenses.length !== 1 ? 's' : ''}
+                            {expandedExpensesTripId === trip.id ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+                        </button>
+                        {expandedExpensesTripId === trip.id && (
+                            <div className="mt-2 space-y-1 bg-slate-50 rounded-lg p-2 border border-slate-100">
+                                {expenses.filter(e => e.amount > 0).map(e => {
+                                    const cat = categories.find(c => c.id === e.categoryId);
+                                    const accountLabel = e.account === 'SHARED' ? '👥' : e.account === 'USER_1' ? users.user_1?.name?.[0] : users.user_2?.name?.[0];
+                                    return (
+                                        <div key={e.id} className="flex items-center justify-between text-xs py-1 border-b border-slate-100 last:border-0">
+                                            <div className="flex items-center gap-2 min-w-0">
+                                                <span className="text-slate-400 shrink-0">{e.date ? new Date(e.date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' }) : e.monthId}</span>
+                                                <span className="text-slate-600 truncate">{e.description || cat?.name || 'Expense'}</span>
+                                            </div>
+                                            <div className="flex items-center gap-1.5 shrink-0 ml-2">
+                                                <span className="text-[10px] bg-slate-200 text-slate-500 px-1 rounded">{accountLabel}</span>
+                                                <span className="font-semibold text-slate-700">{formatCurrency(e.amount, currency)}</span>
+                                            </div>
+                                        </div>
+                                    );
+                                })}
+                                {expenses.filter(e => e.amount > 0).length === 0 && (
+                                    <p className="text-xs text-slate-400 italic text-center py-1">All expenses are zero-amount placeholders.</p>
+                                )}
+                            </div>
+                        )}
+                    </div>
+                )}
 
                 {/* Inline Expense Form */}
                 {isAddingExpense && (
@@ -330,7 +371,7 @@ export const TravelDashboard: React.FC<TravelDashboardProps> = ({ trips, entries
                 <button
                     onClick={() => {
                         setEditingTrip(null);
-                        setNewTrip({ status: 'PLANNED' });
+                        setNewTrip({ status: 'PLANNED', account: 'SHARED', budget: 0 });
                         setIsFormOpen(!isFormOpen);
                     }}
                     className="flex items-center gap-2 bg-slate-900 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-slate-800 transition"

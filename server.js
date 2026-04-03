@@ -188,7 +188,164 @@ app.patch('/api/instance/:id/rename', (req, res) => {
     );
 });
 
-// --- 5. Catch-all for React Frontend ---
+// --- 5. AI Routes (provider-agnostic via fetch) ---
+
+// Runtime AI config — can be overridden via POST /api/config/ai
+const aiConfig = {
+    apiKey: process.env.AI_API_KEY || '',
+    provider: process.env.AI_PROVIDER || 'gemini',
+    model: process.env.AI_MODEL || 'gemini-2.0-flash',
+    baseUrl: process.env.AI_BASE_URL || 'https://api.openai.com/v1',
+};
+
+// GET /api/config/ai — return current config (key is masked)
+app.get('/api/config/ai', (req, res) => {
+    res.json({
+        provider: aiConfig.provider,
+        model: aiConfig.model,
+        baseUrl: aiConfig.baseUrl,
+        hasApiKey: !!aiConfig.apiKey,
+        apiKeyHint: aiConfig.apiKey ? `${aiConfig.apiKey.slice(0, 4)}…${aiConfig.apiKey.slice(-4)}` : '',
+    });
+});
+
+// POST /api/config/ai — update runtime config (not persisted to disk)
+app.post('/api/config/ai', (req, res) => {
+    const { apiKey, provider, model, baseUrl } = req.body;
+    if (apiKey !== undefined) aiConfig.apiKey = apiKey;
+    if (provider) aiConfig.provider = provider;
+    if (model) aiConfig.model = model;
+    if (baseUrl) aiConfig.baseUrl = baseUrl;
+    res.json({ ok: true, hasApiKey: !!aiConfig.apiKey, provider: aiConfig.provider, model: aiConfig.model });
+});
+
+/**
+ * Calls the configured AI provider and returns the text response.
+ * Supports: Gemini (google.generativeai) and OpenAI-compatible APIs.
+ */
+async function callAI(systemPrompt, userMessage, imageBase64 = null, imageMimeType = null) {
+    if (!aiConfig.apiKey) throw new Error('AI API key not configured. Go to Settings → AI Configuration to add your key.');
+
+    if (aiConfig.provider === 'gemini') {
+        const url = `https://generativelanguage.googleapis.com/v1beta/models/${aiConfig.model}:generateContent?key=${aiConfig.apiKey}`;
+        const parts = [];
+        if (imageBase64 && imageMimeType) {
+            parts.push({ inline_data: { mime_type: imageMimeType, data: imageBase64 } });
+        }
+        parts.push({ text: userMessage });
+
+        const body = {
+            system_instruction: { parts: [{ text: systemPrompt }] },
+            contents: [{ role: 'user', parts }],
+            generationConfig: { temperature: 0.3, maxOutputTokens: 2048 }
+        };
+        const res = await fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body)
+        });
+        if (!res.ok) {
+            const err = await res.text();
+            throw new Error(`Gemini API error ${res.status}: ${err}`);
+        }
+        const data = await res.json();
+        return data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+    }
+
+    // OpenAI-compatible fallback
+    const messages = [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: imageBase64
+            ? [{ type: 'image_url', image_url: { url: `data:${imageMimeType};base64,${imageBase64}` } }, { type: 'text', text: userMessage }]
+            : userMessage
+        }
+    ];
+    const res = await fetch(`${aiConfig.baseUrl}/chat/completions`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${aiConfig.apiKey}` },
+        body: JSON.stringify({ model: aiConfig.model, messages, temperature: 0.3, max_tokens: 2048 })
+    });
+    if (!res.ok) {
+        const err = await res.text();
+        throw new Error(`AI API error ${res.status}: ${err}`);
+    }
+    const data = await res.json();
+    return data.choices?.[0]?.message?.content || '';
+}
+
+// Chat endpoint — question answering about finances
+app.post('/api/ai/chat', async (req, res) => {
+    const { message, context } = req.body;
+    if (!message) { res.status(400).json({ error: 'Missing message' }); return; }
+
+    const systemPrompt = `You are a personal finance assistant for FairShare, a couples expense tracking app.
+You have access to the user's financial data provided in context.
+Answer questions concisely. When referencing amounts, use the currency symbol from context.
+If asked to fix data issues, respond with a JSON action object like:
+{"action":"delete_entries","ids":["id1","id2"]} or {"action":"none"} if no data change needed.
+Always explain what you found before suggesting any action.`;
+
+    const userMsg = context
+        ? `Financial data context:\n${JSON.stringify(context, null, 2)}\n\nUser question: ${message}`
+        : message;
+
+    try {
+        const reply = await callAI(systemPrompt, userMsg);
+        res.json({ reply });
+    } catch (e) {
+        console.error('AI chat error:', e.message);
+        res.status(500).json({ error: e.message });
+    }
+});
+
+// Receipt scan endpoint — parse an image and extract expense fields
+app.post('/api/ai/scan-receipt', async (req, res) => {
+    const { imageBase64, mimeType } = req.body;
+    if (!imageBase64) { res.status(400).json({ error: 'Missing imageBase64' }); return; }
+
+    const systemPrompt = `You are a receipt parser. Extract expense data from the image and respond ONLY with a valid JSON object (no markdown, no explanation) with these fields:
+{
+  "amount": number,
+  "date": "YYYY-MM-DD or null",
+  "description": "merchant name or short description",
+  "suggestedCategory": "one of: Groceries, Bar & Restaurants, Transport, Shopping, Health, Entertainment, Travel, Other",
+  "currency": "3-letter code like EUR, USD or null"
+}
+If you cannot read the receipt, return {"error": "Cannot read receipt"}.`;
+
+    try {
+        const raw = await callAI(systemPrompt, 'Parse this receipt.', imageBase64, mimeType || 'image/jpeg');
+        const cleaned = raw.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+        const parsed = JSON.parse(cleaned);
+        res.json(parsed);
+    } catch (e) {
+        console.error('Receipt scan error:', e.message);
+        res.status(500).json({ error: e.message });
+    }
+});
+
+// Expense review endpoint — analyse patterns and flag issues
+app.post('/api/ai/review', async (req, res) => {
+    const { context } = req.body;
+    if (!context) { res.status(400).json({ error: 'Missing context' }); return; }
+
+    const systemPrompt = `You are a financial advisor reviewing a couple's expenses in FairShare.
+Analyse the data and return ONLY a JSON array of insight objects (no markdown):
+[{"type":"warning|tip|info","title":"short title","body":"1-2 sentence explanation"}]
+Focus on: budget overruns, unusual spikes, savings opportunities, unbalanced contributions. Max 5 insights.`;
+
+    try {
+        const raw = await callAI(systemPrompt, `Analyse this financial data:\n${JSON.stringify(context, null, 2)}`);
+        const cleaned = raw.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+        const insights = JSON.parse(cleaned);
+        res.json({ insights });
+    } catch (e) {
+        console.error('AI review error:', e.message);
+        res.status(500).json({ error: e.message });
+    }
+});
+
+// Catch-all for React Frontend
 app.get('*', (req, res) => {
     // If we are in dev mode (no dist folder), this might fail, but the proxy handles it.
     // In production/start mode, this serves index.html

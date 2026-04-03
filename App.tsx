@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
-import { 
-  LayoutDashboard, 
-  Target, 
+import {
+  LayoutDashboard,
+  Target,
   Settings as SettingsIcon,
   PieChart,
   Plane,
@@ -14,7 +14,8 @@ import {
   ChevronRight,
   List,
   Grid,
-  Calendar as CalendarIcon
+  Calendar as CalendarIcon,
+  Sparkles
 } from 'lucide-react';
 
 import { ExpenseEntry, AccountType, Budget, SavingsGoal, Category, TimeRange, Trip, IncomeEntry, User, UserId, AppInstance, CurrencyCode, Suggestion } from './types';
@@ -26,18 +27,27 @@ import { BudgetManager } from './components/BudgetManager';
 import { TravelDashboard } from './components/TravelDashboard';
 import { IncomeManager } from './components/IncomeManager';
 import { SettingsPage } from './components/SettingsPage';
+import { AIAssistant } from './components/AIAssistant';
 import { MonthPicker } from './components/MonthPicker';
 import { ErrorBoundary } from './components/ErrorBoundary'; 
 import { getMonthLabel } from './services/financeService';
 import { getInstance, saveInstance } from './services/storage';
-import { generateId } from './services/utils';
+import { generateId, entryHasTrip, entryHasNoTrip, normalizeTripId } from './services/utils';
+import { useToast } from './components/Toast';
 
-type MainTab = 'insights' | 'register' | 'planning' | 'settings';
+type MainTab = 'insights' | 'register' | 'planning' | 'ai' | 'settings';
 type RegisterView = 'worksheet' | 'single' | 'income';
 type PlanningView = 'budget' | 'travel';
 type InsightsView = 'global' | 'monthly';
 
 type SaveStatus = 'saved' | 'saving' | 'unsaved';
+
+/** Merge two arrays by id — server items win for existing IDs, local-only items are preserved. */
+function mergeById<T extends { id: string }>(local: T[], server: T[]): T[] {
+    const serverMap = new Map(server.map(item => [item.id, item]));
+    const localOnly = local.filter(item => !serverMap.has(item.id));
+    return [...server, ...localOnly];
+}
 
 interface AppProps {
     instanceId: string;
@@ -53,6 +63,7 @@ function App({ instanceId, onExit }: AppProps) {
   const [saveStatus, setSaveStatus] = useState<SaveStatus>('saved');
   const [lastUpdated, setLastUpdated] = useState<number>(0);
   const [createdTimestamp, setCreatedTimestamp] = useState<number>(Date.now());
+  const { toast } = useToast();
   
   // Navigation State
   const [activeMainTab, setActiveMainTab] = useState<MainTab>('insights');
@@ -113,12 +124,18 @@ function App({ instanceId, onExit }: AppProps) {
             setUsers(loadedUsers);
             setCurrency(data.currency);
             setTheme(data.theme || 'light');
-            setEntries(data.data.entries);
+            // Normalize tripId fields from legacy string format to arrays
+            const normalizedEntries = data.data.entries.map(e => ({
+                ...e,
+                tripId: normalizeTripId(e.tripId)
+            }));
+            setEntries(normalizedEntries);
             setIncomes(data.data.incomes);
             setCategories(data.data.categories);
             setBudgets(data.data.budgets);
             setSavings(data.data.savings);
-            setTrips(data.data.trips);
+            // Normalize trips: ensure account defaults to SHARED
+            setTrips(data.data.trips.map(t => ({ ...t, account: t.account || 'SHARED' })));
             setSuggestions(data.data.suggestions || []);
             setLastUpdated(data.lastUpdated || 0);
             setCreatedTimestamp(data.created || Date.now());
@@ -130,7 +147,7 @@ function App({ instanceId, onExit }: AppProps) {
     loadData();
   }, [instanceId]);
 
-  // Sync polling (every 10 seconds)
+  // Sync polling (every 5 seconds)
   useEffect(() => {
       if (loading || saveStatus !== 'saved') return;
 
@@ -138,23 +155,24 @@ function App({ instanceId, onExit }: AppProps) {
           try {
               const data = await getInstance(instanceId);
               if (data && data.lastUpdated && data.lastUpdated > lastUpdated) {
-                  // Newer data on server!
-                  setEntries(data.data.entries);
-                  setIncomes(data.data.incomes);
+                  // Newer data on server — merge arrays so local-only items aren't lost
+                  const serverEntries = data.data.entries.map((e: ExpenseEntry) => ({ ...e, tripId: normalizeTripId(e.tripId) }));
+                  setEntries(prev => mergeById(prev, serverEntries));
+                  setIncomes(prev => mergeById(prev, data.data.incomes));
                   setCategories(data.data.categories);
                   setBudgets(data.data.budgets);
-                  setSavings(data.data.savings);
-                  setTrips(data.data.trips);
-                  setSuggestions(data.data.suggestions || []);
+                  setSavings(prev => mergeById(prev, data.data.savings));
+                  setTrips(prev => mergeById(prev, data.data.trips.map((t: Trip) => ({ ...t, account: t.account || 'SHARED' }))));
+                  setSuggestions(prev => mergeById(prev, data.data.suggestions || []));
                   setLastUpdated(data.lastUpdated);
-                  console.log("Synced newer data from server");
+                  toast('Synced changes from another device', 'info');
               }
           } catch (e) {
               console.error("Polling error:", e);
           }
       };
 
-      const interval = setInterval(poll, 10000);
+      const interval = setInterval(poll, 5000);
       return () => clearInterval(interval);
   }, [instanceId, loading, saveStatus, lastUpdated]);
 
@@ -191,23 +209,25 @@ function App({ instanceId, onExit }: AppProps) {
               setSaveStatus('saved');
           } catch (err: any) {
               if (err.status === 409) {
-                  console.warn("Conflict detected, reloading data...");
-                  // Reload latest
+                  console.warn("Conflict detected, merging data...");
                   const data = await getInstance(instanceId);
                   if (data) {
-                      setEntries(data.data.entries);
-                      setIncomes(data.data.incomes);
+                      const serverEntries = data.data.entries.map((e: ExpenseEntry) => ({ ...e, tripId: normalizeTripId(e.tripId) }));
+                      setEntries(prev => mergeById(prev, serverEntries));
+                      setIncomes(prev => mergeById(prev, data.data.incomes));
                       setCategories(data.data.categories);
                       setBudgets(data.data.budgets);
-                      setSavings(data.data.savings);
-                      setTrips(data.data.trips);
-                      setSuggestions(data.data.suggestions || []);
+                      setSavings(prev => mergeById(prev, data.data.savings));
+                      setTrips(prev => mergeById(prev, data.data.trips.map((t: Trip) => ({ ...t, account: t.account || 'SHARED' }))));
+                      setSuggestions(prev => mergeById(prev, data.data.suggestions || []));
                       setLastUpdated(data.lastUpdated || 0);
+                      toast('Merged changes from server', 'info');
                   }
                   setSaveStatus('saved');
               } else {
                   console.error("Save error:", err);
                   setSaveStatus('unsaved');
+                  toast('Failed to save — will retry', 'error');
               }
           }
       };
@@ -298,7 +318,17 @@ function App({ instanceId, onExit }: AppProps) {
   const filteredDashboardEntries = useMemo(() => entries.filter(e => filterByDate(e.monthId)), [entries, dashboardRange]);
   const filteredDashboardIncomes = useMemo(() => incomes.filter(i => filterByDate(i.monthId)), [incomes, dashboardRange]);
 
-  if (loading || !users.user_1 || !users.user_2) return <div className="min-h-screen flex items-center justify-center bg-slate-100 text-slate-400">Loading Database...</div>;
+  if (loading || !users.user_1 || !users.user_2) return (
+    <div className="min-h-screen bg-slate-100 flex flex-col items-center justify-center gap-4">
+      <div className="w-12 h-12 bg-indigo-600 rounded-xl flex items-center justify-center font-bold text-white text-xl shadow-lg shadow-indigo-500/30 animate-pulse">FS</div>
+      <div className="space-y-2 w-64">
+        <div className="h-3 bg-slate-200 rounded-full animate-pulse w-full" />
+        <div className="h-3 bg-slate-200 rounded-full animate-pulse w-4/5" />
+        <div className="h-3 bg-slate-200 rounded-full animate-pulse w-3/5" />
+      </div>
+      <p className="text-xs text-slate-400 font-medium">Loading your finances…</p>
+    </div>
+  );
 
   const bgClass = theme === 'dark' ? 'bg-slate-950 text-slate-100' : 'bg-slate-100 text-slate-800';
   const navBarClass = theme === 'dark' ? 'bg-slate-900 border-slate-800 text-slate-300' : 'bg-white border-slate-200 text-slate-600';
@@ -314,8 +344,8 @@ function App({ instanceId, onExit }: AppProps) {
 
   return (
     <div className={`min-h-screen font-sans transition-colors duration-300 pb-20 md:pb-0 ${bgClass}`}>
-      
-      <MonthPicker 
+
+      <MonthPicker
         isOpen={isMonthPickerOpen} onClose={() => setIsMonthPickerOpen(false)} 
         currentMonthId={currentMonth} onSelect={setCurrentMonth}
       />
@@ -415,19 +445,25 @@ function App({ instanceId, onExit }: AppProps) {
                  </div>
                )}
 
-               {/* Save Status */}
-               <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full border transition-colors ${theme === 'dark' ? 'bg-slate-800 border-slate-700' : 'bg-slate-50 border-slate-100'}`}>
-                   {saveStatus === 'saved' ? (
-                       <CheckCircle2 size={14} className="text-emerald-500" />
+               {/* Save Status — subtle dot */}
+               <div className="flex items-center gap-1" title={saveStatus === 'saved' ? 'All changes saved' : 'Saving…'}>
+                   {saveStatus === 'saving' ? (
+                       <span className="w-1.5 h-1.5 rounded-full bg-indigo-400 animate-pulse" />
                    ) : (
-                       <Cloud size={14} className="text-indigo-500 animate-pulse" />
+                       <span className="w-1.5 h-1.5 rounded-full bg-emerald-400/60" />
                    )}
-                   <span className="text-xs font-medium text-slate-500 hidden sm:inline">
-                       {saveStatus === 'saved' ? 'Saved' : 'Saving...'}
-                   </span>
                </div>
 
-               <button 
+               {/* AI Assistant */}
+               <button
+                   onClick={() => setActiveMainTab('ai')}
+                   title="AI Assistant"
+                   className={`p-2 rounded-full transition-colors ${activeMainTab === 'ai' ? (theme === 'dark' ? 'bg-slate-800 text-indigo-400' : 'bg-indigo-50 text-indigo-600') : (theme === 'dark' ? 'text-slate-400 hover:text-slate-200' : 'text-slate-400 hover:text-slate-600')}`}
+               >
+                   <Sparkles size={18} />
+               </button>
+
+               <button
                     onClick={() => setActiveMainTab('settings')}
                     className={`p-2 rounded-full transition-colors ${activeMainTab === 'settings' ? (theme === 'dark' ? 'bg-slate-800 text-white' : 'bg-slate-100 text-indigo-600') : 'text-slate-400 hover:text-slate-500'}`}
                >
@@ -483,15 +519,15 @@ function App({ instanceId, onExit }: AppProps) {
                           onUpdateEntry={(cid, acc, amt, tid, desc) => {
                               setEntries(prev => {
                                   // For worksheet entries, we filter by category, account, month, AND specific trip
-                                  const singleSum = prev.filter(e => e.categoryId === cid && e.account === acc && e.monthId === currentMonth && e.entryType === 'single' && (tid ? e.tripId?.includes(tid) : (!e.tripId || e.tripId.length === 0))).reduce((s, e) => s + e.amount, 0);
+                                  const singleSum = prev.filter(e => e.categoryId === cid && e.account === acc && e.monthId === currentMonth && e.entryType === 'single' && (tid ? entryHasTrip(e.tripId, tid) : entryHasNoTrip(e.tripId))).reduce((s, e) => s + e.amount, 0);
                                   const needed = amt - singleSum;
-                                  
-                                  const idx = prev.findIndex(e => e.categoryId === cid && e.account === acc && e.monthId === currentMonth && e.entryType === 'worksheet' && (tid ? e.tripId?.includes(tid) : (!e.tripId || e.tripId.length === 0)));
-                                  
-                                  if (idx >= 0) { 
-                                      const next = [...prev]; 
-                                      next[idx] = { ...next[idx], amount: needed, ...(tid !== undefined ? { tripId: tid ? [tid] : [] } : {}), ...(desc !== undefined ? { description: desc } : {}) }; 
-                                      return next; 
+
+                                  const idx = prev.findIndex(e => e.categoryId === cid && e.account === acc && e.monthId === currentMonth && e.entryType === 'worksheet' && (tid ? entryHasTrip(e.tripId, tid) : entryHasNoTrip(e.tripId)));
+
+                                  if (idx >= 0) {
+                                      const next = [...prev];
+                                      next[idx] = { ...next[idx], amount: needed, ...(tid !== undefined ? { tripId: tid ? [tid] : [] } : {}), ...(desc !== undefined ? { description: desc } : {}) };
+                                      return next;
                                   }
                                   return [...prev, { id: generateId(), monthId: currentMonth, categoryId: cid, account: acc, amount: needed, entryType: 'worksheet', tripId: tid ? [tid] : [], description: desc }];
                               });
@@ -553,12 +589,21 @@ function App({ instanceId, onExit }: AppProps) {
                         }}
                     />}
                     
-                    {activePlanningView === 'budget' && <BudgetManager budgets={budgets} categories={categories} savings={savings} entries={entries} totalIncome={currentTotalIncome} users={users} currency={currency} getInputClass={getInputClass}
-                      onAddBudget={(cid, lim, acc) => setBudgets(p => [...p, { categoryId: cid, limit: lim, account: acc }])}
+                    {activePlanningView === 'budget' && <BudgetManager
+                      budgets={budgets} categories={categories} savings={savings}
+                      entries={entries} incomes={incomes} totalIncome={currentTotalIncome}
+                      users={users} currency={currency} getInputClass={getInputClass}
+                      onAddBudget={(cid, lim, acc) => setBudgets(p => {
+                          // Replace existing budget for same category+account, or append
+                          const idx = p.findIndex(b => b.categoryId === cid && b.account === acc);
+                          if (idx >= 0) { const next = [...p]; next[idx] = { categoryId: cid, limit: lim, account: acc }; return next; }
+                          return [...p, { categoryId: cid, limit: lim, account: acc }];
+                      })}
+                      onDeleteBudget={(cid, acc) => setBudgets(p => p.filter(b => !(b.categoryId === cid && b.account === acc)))}
                       onAddGoal={(n, t, tt, i, acc, sd, td, pp) => {
                           const gid = n.toLowerCase().replace(/\s+/g, '_') + '_' + generateId().slice(0, 8);
                           setCategories(p => [...p, { id: gid, name: n, group: 'SAVINGS', defaultAccount: acc }]);
-                          setSavings(p => [...p, { id: gid, name: n, targetAmount: t, targetType: tt, initialAmount: i, account: acc, startDate: sd, targetDate: td, projectionPeriod: pp }]);
+                          setSavings(p => [...p, { id: gid, name: n, targetAmount: t, targetType: tt, initialAmount: i, account: acc, startDate: sd, targetDate: td, projectionPeriod: pp || (tt === 'PERCENTAGE' ? 'MONTHLY' : undefined) }]);
                       }}
                       onUpdateGoal={(updated) => setSavings(p => p.map(s => s.id === updated.id ? updated : s))}
                       onDeleteGoal={(id) => {
@@ -569,18 +614,54 @@ function App({ instanceId, onExit }: AppProps) {
                 </div>
             )}
             
+            {activeMainTab === 'ai' && (
+              <AIAssistant
+                  entries={entries}
+                  categories={categories}
+                  trips={trips}
+                  incomes={incomes}
+                  budgets={budgets}
+                  savings={savings}
+                  users={users}
+                  currency={currency}
+                  theme={theme}
+                  onDeleteEntries={(ids) => setEntries(prev => prev.filter(e => !ids.includes(e.id)))}
+              />
+            )}
+
             {activeMainTab === 'settings' && (
-              <SettingsPage 
+              <SettingsPage
                   instanceName={instanceName}
-                  users={users} 
-                  currency={currency} 
+                  users={users}
+                  currency={currency}
                   theme={theme}
                   getInputClass={getInputClass}
+                  entries={entries}
+                  categories={categories}
+                  trips={trips}
                   onUpdateInstanceName={setInstanceName}
-                  onUpdateUser={handleUpdateUser} 
-                  onUpdateCurrency={setCurrency} 
+                  onUpdateUser={handleUpdateUser}
+                  onUpdateCurrency={setCurrency}
                   onUpdateTheme={handleUpdateTheme}
                   onExport={handleExport}
+                  onImportReplace={(imported) => {
+                      const norm = (imported.data.entries || []).map((e: ExpenseEntry) => ({ ...e, tripId: normalizeTripId(e.tripId) }));
+                      setEntries(norm);
+                      setIncomes(imported.data.incomes || []);
+                      setCategories(imported.data.categories || []);
+                      setBudgets(imported.data.budgets || []);
+                      setSavings(imported.data.savings || []);
+                      setTrips((imported.data.trips || []).map((t: Trip) => ({ ...t, account: t.account || 'SHARED' })));
+                      setSuggestions(imported.data.suggestions || []);
+                      if (imported.currency) setCurrency(imported.currency);
+                      const importedUsers = imported.users || {};
+                      if (!importedUsers.shared) importedUsers.shared = { id: 'shared', name: 'Shared Account', avatar: 'https://api.dicebear.com/7.x/icons/svg?seed=Shared', monthlyIncome: 0, color: '#64748b' };
+                      setUsers(importedUsers);
+                      if (imported.name) setInstanceName(imported.name);
+                  }}
+                  onDeleteEntry={(id) => setEntries(prev => prev.filter(e => e.id !== id))}
+                  onDeleteOrphans={() => setEntries(prev => prev.filter(e => categories.some(c => c.id === e.categoryId)))}
+                  onDeleteZeros={() => setEntries(prev => prev.filter(e => e.amount !== 0))}
                   onExit={onExit}
               />
             )}
@@ -600,6 +681,10 @@ function App({ instanceId, onExit }: AppProps) {
             <button onClick={() => setActiveMainTab('planning')} className={`flex flex-col items-center gap-1 p-2 rounded-lg ${activeMainTab === 'planning' ? 'text-indigo-500' : 'text-slate-400'}`}>
                 <Target size={20} />
                 <span className="text-[10px] font-medium">Planning</span>
+            </button>
+            <button onClick={() => setActiveMainTab('ai')} className={`flex flex-col items-center gap-1 p-2 rounded-lg ${activeMainTab === 'ai' ? 'text-indigo-500' : 'text-slate-400'}`}>
+                <Sparkles size={20} />
+                <span className="text-[10px] font-medium">AI</span>
             </button>
             <button onClick={() => setActiveMainTab('settings')} className={`flex flex-col items-center gap-1 p-2 rounded-lg ${activeMainTab === 'settings' ? 'text-indigo-500' : 'text-slate-400'}`}>
                 <SettingsIcon size={20} />

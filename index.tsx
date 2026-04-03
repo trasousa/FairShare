@@ -4,6 +4,7 @@ import App from './App';
 import { LandingPage } from './components/LandingPage';
 import { Onboarding } from './components/Onboarding';
 import { ErrorBoundary } from './components/ErrorBoundary';
+import { ToastProvider } from './components/Toast';
 
 const Root = () => {
     const [view, setView] = useState<'LANDING' | 'ONBOARDING' | 'APP'>('LANDING');
@@ -59,6 +60,8 @@ if (!rootElement) {
 const root = ReactDOM.createRoot(rootElement);
 root.render(
   <React.StrictMode>
-    <Root />
+    <ToastProvider>
+      <Root />
+    </ToastProvider>
   </React.StrictMode>
 );
