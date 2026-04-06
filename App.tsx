@@ -18,7 +18,7 @@ import {
   Sparkles
 } from 'lucide-react';
 
-import { ExpenseEntry, AccountType, Budget, SavingsGoal, Category, TimeRange, Trip, IncomeEntry, User, UserId, AppInstance, CurrencyCode, Suggestion, CurrentUserId, ChatSession } from './types';
+import { ExpenseEntry, AccountType, Budget, SavingsGoal, Category, TimeRange, Trip, IncomeEntry, User, UserId, AppInstance, CurrencyCode, Suggestion, CurrentUserId, ChatSession, UserSettings } from './types';
 import { MonthlyWorksheet } from './components/MonthlyWorksheet';
 import { SingleEntryForm } from './components/SingleEntryForm';
 import { DashboardCharts } from './components/DashboardCharts';
@@ -98,6 +98,7 @@ function App({ instanceId, currentUser, onExit }: AppProps) {
   const [trips, setTrips] = useState<Trip[]>([]);
   const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
   const [chatSessions, setChatSessions] = useState<ChatSession[]>([]);
+  const [allUserSettings, setAllUserSettings] = useState<Record<string, UserSettings>>({});
   const [prefillData, setPrefillData] = useState<Partial<ExpenseEntry> | null>(null);
 
   // Close dropdowns on outside click
@@ -141,6 +142,7 @@ function App({ instanceId, currentUser, onExit }: AppProps) {
             setTrips(data.data.trips.map(t => ({ ...t, account: t.account || 'SHARED' })));
             setSuggestions(data.data.suggestions || []);
             setChatSessions(data.data.chatSessions || []);
+            setAllUserSettings(data.data.userSettings || {});
             setLastUpdated(data.lastUpdated || 0);
             setCreatedTimestamp(data.created || Date.now());
             setLoading(false);
@@ -207,7 +209,7 @@ function App({ instanceId, currentUser, onExit }: AppProps) {
                       trips,
                       incomes,
                       suggestions,
-                      chatSessions
+                      userSettings: allUserSettings,
                   }
               };
               const result = await saveInstance(updatedInstance);
@@ -242,7 +244,7 @@ function App({ instanceId, currentUser, onExit }: AppProps) {
       const timeoutId = setTimeout(saveData, 500); 
       return () => clearTimeout(timeoutId);
 
-  }, [entries, incomes, categories, budgets, savings, trips, suggestions, chatSessions, users, currency, theme, loading, instanceName]);
+  }, [entries, incomes, categories, budgets, savings, trips, suggestions, allUserSettings, users, currency, theme, loading, instanceName]);
 
   const changeMonth = (direction: -1 | 1) => {
       const [year, month] = currentMonth.split('-').map(Number);
@@ -633,6 +635,7 @@ function App({ instanceId, currentUser, onExit }: AppProps) {
                   currency={currency}
                   theme={theme}
                   currentUser={currentUser}
+                  instanceId={instanceId}
                   chatSessions={chatSessions}
                   onUpdateChatSessions={setChatSessions}
                   onDeleteEntries={(ids) => setEntries(prev => prev.filter(e => !ids.includes(e.id)))}
@@ -642,6 +645,22 @@ function App({ instanceId, currentUser, onExit }: AppProps) {
                     setPrefillData(prefill);
                     setActiveMainTab('register');
                     setActiveRegisterView('single');
+                  }}
+                  userSettings={allUserSettings[currentUser]}
+                  onUpdateUserSettings={(settings) => setAllUserSettings(prev => ({ ...prev, [currentUser]: settings }))}
+                  onRefresh={async () => {
+                    const data = await getInstance(instanceId);
+                    if (data) {
+                      const serverEntries = data.data.entries.map((e: ExpenseEntry) => ({ ...e, tripId: normalizeTripId(e.tripId) }));
+                      setEntries(prev => mergeById(prev, serverEntries));
+                      setIncomes(prev => mergeById(prev, data.data.incomes));
+                      setCategories(data.data.categories);
+                      setBudgets(data.data.budgets);
+                      setSavings(prev => mergeById(prev, data.data.savings));
+                      setTrips(prev => mergeById(prev, data.data.trips.map((t: Trip) => ({ ...t, account: t.account || 'SHARED' }))));
+                      setChatSessions(prev => mergeById(prev, data.data.chatSessions || []));
+                      setLastUpdated(data.lastUpdated || 0);
+                    }
                   }}
               />
             )}

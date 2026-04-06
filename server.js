@@ -29,30 +29,38 @@ const db = new sqlite3.Database(DB_PATH, (err) => {
 });
 
 function initDb() {
-    db.run(`CREATE TABLE IF NOT EXISTS instances (
-        id TEXT PRIMARY KEY,
-        name TEXT,
-        lastAccessed INTEGER,
-        lastUpdated INTEGER,
-        data TEXT
-    )`, (err) => {
-        if (err) {
-             console.error("Error creating table:", err);
-        } else {
-             console.log("Database table 'instances' is ready.");
-             // Migration: Add lastUpdated if it doesn't exist
-             db.run("ALTER TABLE instances ADD COLUMN lastUpdated INTEGER", (err) => {
-                 if (err) {
-                     if (err.message.includes("duplicate column name")) {
-                         // Column already exists, ignore
-                     } else {
-                         console.error("Migration error (lastUpdated):", err);
-                     }
-                 } else {
-                     console.log("Migration: added lastUpdated column.");
-                 }
-             });
-        }
+    db.serialize(() => {
+        db.run(`CREATE TABLE IF NOT EXISTS instances (
+            id TEXT PRIMARY KEY,
+            name TEXT,
+            lastAccessed INTEGER,
+            lastUpdated INTEGER,
+            data TEXT
+        )`, (err) => {
+            if (err) console.error("Error creating instances table:", err);
+            else console.log("Database table 'instances' is ready.");
+        });
+
+        // Migration: Add lastUpdated if it doesn't exist
+        db.run("ALTER TABLE instances ADD COLUMN lastUpdated INTEGER", (err) => {
+            if (err && !err.message.includes("duplicate column name")) {
+                console.error("Migration error (lastUpdated):", err);
+            }
+        });
+
+        // Chat sessions table — per user per instance
+        db.run(`CREATE TABLE IF NOT EXISTS chat_sessions (
+            id TEXT PRIMARY KEY,
+            instanceId TEXT NOT NULL,
+            userId TEXT NOT NULL,
+            name TEXT NOT NULL,
+            messages TEXT NOT NULL DEFAULT '[]',
+            createdAt INTEGER NOT NULL,
+            updatedAt INTEGER NOT NULL
+        )`, (err) => {
+            if (err) console.error("Error creating chat_sessions table:", err);
+            else console.log("Database table 'chat_sessions' is ready.");
+        });
     });
 }
 
@@ -60,7 +68,11 @@ function initDb() {
 app.use(bodyParser.json({ limit: '50mb' }));
 app.use(express.static(path.join(__dirname, 'dist')));
 
-// --- 4. API Routes ---
+// --- 4. SSE Session State ---
+// Map: userId → { sessionToken, res }
+const activeSessions = new Map();
+
+// --- 5. API Routes ---
 
 // Health Check
 app.get('/api/health', (req, res) => {
@@ -88,8 +100,12 @@ app.get('/api/instance/:id', (req, res) => {
         }
         if (row) {
             try {
+                const parsedData = JSON.parse(row.data);
+                if (parsedData.data) {
+                    delete parsedData.data.chatSessions;
+                }
                 const fullInstance = {
-                    ...JSON.parse(row.data),
+                    ...parsedData,
                     id: row.id,
                     name: row.name,
                     lastAccessed: row.lastAccessed,
@@ -123,14 +139,47 @@ app.put('/api/instance', (req, res) => {
             return;
         }
 
+        let instanceToSave = instance;
+
         if (row && incomingLastUpdated && row.lastUpdated > incomingLastUpdated) {
-            // Server has a newer version
-            res.status(409).json({ error: "Conflict: A newer version exists on the server. Please refresh.", serverLastUpdated: row.lastUpdated });
-            return;
+            // Server is newer — attempt field-level merge
+            let serverData;
+            try {
+                serverData = JSON.parse(row.data);
+            } catch (_) {
+                res.status(409).json({ error: "Conflict: A newer version exists on the server and its data could not be parsed.", serverLastUpdated: row.lastUpdated });
+                return;
+            }
+
+            // Merge strategy: for each top-level data array key, append items from
+            // the incoming payload whose ids don't exist on the server, and keep
+            // all server items. Simple last-write-wins for scalar fields (name, currency, etc.).
+            const arrayKeys = ['entries', 'categories', 'budgets', 'savings', 'trips', 'incomes', 'suggestions'];
+            const mergedData = { ...serverData.data };
+            const incomingData = instance.data || {};
+
+            for (const key of arrayKeys) {
+                const serverArr = Array.isArray(serverData.data?.[key]) ? serverData.data[key] : [];
+                const incomingArr = Array.isArray(incomingData[key]) ? incomingData[key] : [];
+                const serverIds = new Set(serverArr.map(x => x.id).filter(Boolean));
+                // Items that exist only in the incoming payload (new items added by this tab)
+                const newItems = incomingArr.filter(x => x.id && !serverIds.has(x.id));
+                mergedData[key] = [...serverArr, ...newItems];
+            }
+
+            instanceToSave = {
+                ...serverData,
+                // scalar fields: prefer incoming values
+                name: instance.name || serverData.name,
+                currency: instance.currency || serverData.currency,
+                theme: instance.theme || serverData.theme,
+                users: instance.users || serverData.users,
+                data: mergedData,
+            };
         }
 
         const now = Date.now();
-        const updatedInstance = { ...instance, lastUpdated: now, lastAccessed: now };
+        const updatedInstance = { ...instanceToSave, lastUpdated: now, lastAccessed: now };
         const dataString = JSON.stringify(updatedInstance);
 
         db.run(
@@ -188,7 +237,112 @@ app.patch('/api/instance/:id/rename', (req, res) => {
     );
 });
 
-// --- 5. AI Routes (provider-agnostic via fetch) ---
+// --- 6. SSE Endpoint — per-tab session presence ---
+// GET /api/sync/events?userId=...&sessionToken=...
+app.get('/api/sync/events', (req, res) => {
+    const { userId, sessionToken } = req.query;
+    if (!userId || !sessionToken) {
+        res.status(400).json({ error: 'Missing userId or sessionToken' });
+        return;
+    }
+
+    // Displace any existing session for this user
+    const existing = activeSessions.get(userId);
+    if (existing && existing.sessionToken !== sessionToken) {
+        try {
+            existing.res.write(`data: ${JSON.stringify({ event: 'session-displaced' })}\n\n`);
+            existing.res.end();
+        } catch (_) { /* already closed */ }
+    }
+
+    // Register this tab as the active session
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection', 'keep-alive');
+    res.flushHeaders();
+
+    activeSessions.set(userId, { sessionToken, res });
+
+    // Send a connected confirmation
+    res.write(`data: ${JSON.stringify({ event: 'connected', sessionToken })}\n\n`);
+
+    // Heartbeat every 25s to keep the connection alive through proxies
+    const heartbeat = setInterval(() => {
+        try { res.write(': heartbeat\n\n'); } catch (_) { clearInterval(heartbeat); }
+    }, 25000);
+
+    req.on('close', () => {
+        clearInterval(heartbeat);
+        const current = activeSessions.get(userId);
+        if (current && current.sessionToken === sessionToken) {
+            activeSessions.delete(userId);
+        }
+    });
+});
+
+// --- 7. Chat Session Endpoints ---
+
+// GET /api/instance/:instanceId/chat-sessions?userId=...
+app.get('/api/instance/:instanceId/chat-sessions', (req, res) => {
+    const { instanceId } = req.params;
+    const { userId } = req.query;
+    if (!userId) { res.status(400).json({ error: 'Missing userId' }); return; }
+
+    db.all(
+        'SELECT * FROM chat_sessions WHERE instanceId = ? AND userId = ? ORDER BY updatedAt DESC',
+        [instanceId, userId],
+        (err, rows) => {
+            if (err) { res.status(500).json({ error: err.message }); return; }
+            const sessions = rows.map(r => ({
+                id: r.id,
+                instanceId: r.instanceId,
+                userId: r.userId,
+                name: r.name,
+                messages: JSON.parse(r.messages),
+                createdAt: r.createdAt,
+                updatedAt: r.updatedAt,
+            }));
+            res.json(sessions);
+        }
+    );
+});
+
+// PUT /api/instance/:instanceId/chat-sessions/:sessionId
+app.put('/api/instance/:instanceId/chat-sessions/:sessionId', (req, res) => {
+    const { instanceId, sessionId } = req.params;
+    const { userId, name, messages, createdAt } = req.body;
+    if (!userId || !name) { res.status(400).json({ error: 'Missing userId or name' }); return; }
+
+    const now = Date.now();
+    const messagesJson = JSON.stringify(messages || []);
+
+    db.run(
+        `INSERT INTO chat_sessions (id, instanceId, userId, name, messages, createdAt, updatedAt)
+         VALUES (?, ?, ?, ?, ?, ?, ?)
+         ON CONFLICT(id) DO UPDATE SET name = ?, messages = ?, updatedAt = ?`,
+        [sessionId, instanceId, userId, name, messagesJson, createdAt || now, now,
+         name, messagesJson, now],
+        (err) => {
+            if (err) { res.status(500).json({ error: err.message }); return; }
+            res.json({ ok: true, updatedAt: now });
+        }
+    );
+});
+
+// DELETE /api/instance/:instanceId/chat-sessions/:sessionId
+app.delete('/api/instance/:instanceId/chat-sessions/:sessionId', (req, res) => {
+    const { instanceId, sessionId } = req.params;
+    db.run(
+        'DELETE FROM chat_sessions WHERE id = ? AND instanceId = ?',
+        [sessionId, instanceId],
+        (err) => {
+            if (err) { res.status(500).json({ error: err.message }); return; }
+            res.json({ ok: true });
+        }
+    );
+});
+
+// --- 8. AI Routes (provider-agnostic via fetch) ---
 
 // Runtime AI config — can be overridden via POST /api/config/ai
 const aiConfig = {
@@ -290,15 +444,34 @@ async function callAI(systemPrompt, userMessage, imageBase64 = null, imageMimeTy
     return data.choices?.[0]?.message?.content || '';
 }
 
+/**
+ * Build a category list section for system prompts.
+ * context: "personal" | "shared" | undefined
+ * categories: Category[] from instance data
+ */
+function buildCategorySection(categories, context) {
+    if (!categories || categories.length === 0) return '';
+    let filtered = categories;
+    if (context === 'personal') {
+        filtered = categories.filter(c => c.defaultAccount !== 'SHARED');
+    } else if (context === 'shared') {
+        filtered = categories.filter(c => c.defaultAccount === 'SHARED');
+    }
+    const lines = filtered.map(c => `  - ${c.id}: "${c.name}" (${c.group}, default: ${c.defaultAccount})`).join('\n');
+    return `\nAvailable expense categories (use these IDs when mapping transactions):\n${lines}`;
+}
+
 // Chat endpoint — question answering about finances
 app.post('/api/ai/chat', async (req, res) => {
-    const { message, context, currentUser, conversationHistory } = req.body;
+    const { message, context, currentUser, conversationHistory, expenseContext } = req.body;
     if (!message) { res.status(400).json({ error: 'Missing message' }); return; }
 
     const currentUserInfo = currentUser ? `\nThe person asking is "${currentUser.name}" (${currentUser.id}).` : '';
     const currentMonthInfo = context?.currentMonth ? `\nThe current month is ${context.currentMonth}.` : '';
+    const categorySection = buildCategorySection(context?.categories, expenseContext);
+
     const systemPrompt = `You are a personal finance assistant for FairShare, a couples expense tracking app.
-You have access to the user's financial data provided in context.${currentUserInfo}${currentMonthInfo}
+You have access to the user's financial data provided in context.${currentUserInfo}${currentMonthInfo}${categorySection}
 Answer questions concisely. When referencing amounts, use the currency symbol from context.
 When the user wants to add an expense, income, or savings entry, always confirm: (1) the month (default: current month shown in context), and (2) which account it belongs to (default: the current user's account). Ask these before confirming the action.
 If asked to fix data issues, respond with a JSON action object like:
@@ -320,15 +493,21 @@ Always explain what you found before suggesting any action.`;
 
 // Receipt scan endpoint — parse an image and extract expense fields
 app.post('/api/ai/scan-receipt', async (req, res) => {
-    const { imageBase64, mimeType } = req.body;
+    const { imageBase64, mimeType, categories, expenseContext } = req.body;
     if (!imageBase64) { res.status(400).json({ error: 'Missing imageBase64' }); return; }
 
-    const systemPrompt = `You are a receipt parser. Extract expense data from the image and respond ONLY with a valid JSON object (no markdown, no explanation) with these fields:
+    const categorySection = buildCategorySection(categories, expenseContext);
+    const categoryList = categories && categories.length > 0
+        ? categories.map(c => c.id).join(', ')
+        : 'groceries, dining_shared, transport_shared, travel_general, insurance, utilities, rent, Other';
+
+    const systemPrompt = `You are a receipt parser.${categorySection}
+Extract expense data from the image and respond ONLY with a valid JSON object (no markdown, no explanation) with these fields:
 {
   "amount": number,
   "date": "YYYY-MM-DD or null",
   "description": "merchant name or short description",
-  "suggestedCategory": "one of: Groceries, Bar & Restaurants, Transport, Shopping, Health, Entertainment, Travel, Other",
+  "categoryId": "one of the category IDs above that best matches; use the id string",
   "currency": "3-letter code like EUR, USD or null"
 }
 If you cannot read the receipt, return {"error": "Cannot read receipt"}.`;
@@ -367,19 +546,40 @@ Focus on: budget overruns, unusual spikes, savings opportunities, unbalanced con
 
 // Bank statement parse endpoint — extract transactions from a PDF or image
 app.post('/api/ai/parse-statement', async (req, res) => {
-    const { attachmentBase64, mimeType, owner } = req.body;
+    const { attachmentBase64, mimeType, owner, categories, expenseContext } = req.body;
     if (!attachmentBase64) { res.status(400).json({ error: 'Missing attachmentBase64' }); return; }
 
-    const systemPrompt = `You are a bank statement parser. Extract all transactions from this document and respond ONLY with a valid JSON array (no markdown, no explanation). Each transaction should have:
-[{"date":"YYYY-MM-DD","description":"merchant or transaction description","amount":number,"suggestedCategory":"one of: Groceries, Bar & Restaurants, Transport, Shopping, Health, Entertainment, Travel, Subscriptions, Utilities, Rent, Insurance, Other"}]
-Positive amounts are expenses/debits. Negative amounts are income/credits. Parse ALL transactions you can find. Be thorough.
-If you cannot read the document, return {"error": "Cannot parse statement"}.`;
+    const categorySection = buildCategorySection(categories, expenseContext);
+    const categoryIds = categories && categories.length > 0
+        ? categories.map(c => c.id).join(', ')
+        : 'Groceries, Bar & Restaurants, Transport, Shopping, Health, Entertainment, Travel, Subscriptions, Utilities, Rent, Insurance, Other';
+
+    const systemPrompt = `You are a bank statement parser.${categorySection}
+Extract all transactions from this document and respond ONLY with a valid JSON object (no markdown, no explanation):
+{
+  "transactions": [{"date":"YYYY-MM-DD","description":"merchant or transaction description","amount":number,"categoryId":"one of the category IDs above","confidence":"high|low"}],
+  "pendingQuestions": [{"transactionDescription":"...","question":"Why are you unsure?","options":["categoryId1","categoryId2"]}]
+}
+Rules:
+- Map each transaction to the most appropriate categoryId from the list above.
+- If confidence is "low" (ambiguous transaction), add an entry to pendingQuestions instead of guessing.
+- Positive amounts are expenses/debits. Negative amounts are income/credits.
+- Parse ALL transactions. Be thorough.
+- If you cannot read the document, return {"error": "Cannot parse statement"}.`;
 
     try {
         const raw = await callAI(systemPrompt, 'Parse all transactions from this bank statement.', attachmentBase64, mimeType || 'application/pdf');
         const cleaned = raw.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
         const parsed = JSON.parse(cleaned);
-        res.json({ transactions: Array.isArray(parsed) ? parsed : [], owner: owner || 'SHARED' });
+        if (parsed.error) {
+            res.status(422).json({ error: parsed.error });
+            return;
+        }
+        res.json({
+            transactions: Array.isArray(parsed.transactions) ? parsed.transactions : [],
+            pendingQuestions: Array.isArray(parsed.pendingQuestions) ? parsed.pendingQuestions : [],
+            owner: owner || 'SHARED',
+        });
     } catch (e) {
         console.error('Statement parse error:', e.message);
         res.status(500).json({ error: e.message });

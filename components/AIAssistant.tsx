@@ -1,14 +1,13 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { ExpenseEntry, Category, Trip, CurrencyCode, User, IncomeEntry, Budget, SavingsGoal, AccountType, CurrentUserId, ChatSession, ChatMessage } from '../types';
-import { formatCurrency } from '../services/financeService';
-import { Send, Sparkles, X, AlertTriangle, TrendingUp, Info, Loader, Plus, FileText, Image, BarChart3, MessageSquarePlus, Trash2, Edit3, Check, ChevronDown } from 'lucide-react';
+import { ExpenseEntry, Category, Trip, CurrencyCode, User, IncomeEntry, Budget, SavingsGoal, AccountType, CurrentUserId, ChatSession, ChatMessage, UserSettings } from '../types';
+import { Send, Sparkles, X, AlertTriangle, TrendingUp, Info, Loader, Plus, FileText, Image, BarChart3, MessageSquarePlus, Trash2, Edit3, Check, ChevronDown, Settings, RefreshCw, WifiOff } from 'lucide-react';
 import { generateId } from '../services/utils';
 
 interface ParsedTransaction {
   date: string;
   description: string;
   amount: number;
-  suggestedCategory: string;
+  categoryId: string;
   comment?: string;
   // Classification: 'expense' (positive debit), 'salary' (large credit), 'deduction' (small credit applied to expense)
   txnType?: 'expense' | 'salary' | 'deduction';
@@ -26,8 +25,14 @@ interface ReceiptData {
   amount: number | null;
   date: string | null;
   description: string | null;
-  suggestedCategory: string | null;
+  categoryId: string | null;
   currency: string | null;
+}
+
+interface PendingQuestion {
+  transactionDescription?: string;
+  question: string;
+  options: string[];
 }
 
 // Internal rich message (not persisted directly)
@@ -41,6 +46,7 @@ interface Message {
   targetMonth?: string; // Override month for all transactions without a date
   insights?: Insight[];
   receiptData?: ReceiptData;
+  pendingQuestions?: PendingQuestion[];
 }
 
 interface AIAssistantProps {
@@ -54,12 +60,16 @@ interface AIAssistantProps {
   currency: CurrencyCode;
   theme?: 'light' | 'dark';
   currentUser: CurrentUserId;
+  instanceId: string;
   chatSessions: ChatSession[];
   onUpdateChatSessions: (sessions: ChatSession[]) => void;
   onDeleteEntries?: (ids: string[]) => void;
   onAddEntries?: (entries: Omit<ExpenseEntry, 'id'>[]) => void;
   onAddIncome?: (source: string, amount: number, recipient: AccountType, monthId: string) => void;
   onNavigateToExpense?: (prefill: Partial<ExpenseEntry>) => void;
+  userSettings?: UserSettings;
+  onUpdateUserSettings?: (settings: UserSettings) => void;
+  onRefresh?: () => void;
 }
 
 const MAX_CONTEXT_MESSAGES = 10; // Last N messages sent as conversation context
@@ -128,10 +138,36 @@ function renderMarkdown(text: string, isDark: boolean): React.ReactNode {
 }
 
 export const AIAssistant: React.FC<AIAssistantProps> = ({
-  entries, categories, trips, incomes, budgets, savings, users, currency, theme = 'light', currentUser, chatSessions, onUpdateChatSessions, onDeleteEntries, onAddEntries, onAddIncome, onNavigateToExpense
+  entries, categories, trips, incomes, budgets, savings, users, currency, theme = 'light', currentUser, instanceId, chatSessions, onUpdateChatSessions, onDeleteEntries, onAddEntries, onAddIncome, onNavigateToExpense, userSettings, onUpdateUserSettings, onRefresh
 }) => {
   const currentUserName = users[currentUser]?.name || currentUser;
   const isDark = theme === 'dark';
+
+  // SSE session token (per-tab UUID)
+  const sessionTokenRef = useRef<string>(generateId());
+  const [isDisplaced, setIsDisplaced] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
+  const [draftApiKey, setDraftApiKey] = useState(userSettings?.apiKey || '');
+  const [draftModel, setDraftModel] = useState(userSettings?.model || '');
+  const [draftProvider, setDraftProvider] = useState<UserSettings['provider']>(userSettings?.provider || 'google');
+
+  // SSE connection for session displacement and real-time sync
+  useEffect(() => {
+    const token = sessionTokenRef.current;
+    const url = `/api/sync/events?userId=${encodeURIComponent(currentUser)}&sessionToken=${encodeURIComponent(token)}`;
+    const evtSource = new EventSource(url);
+    evtSource.onmessage = (e) => {
+      try {
+        const payload = JSON.parse(e.data);
+        if (payload.event === 'session-displaced') {
+          setIsDisplaced(true);
+        } else if (payload.event === 'data-updated') {
+          onRefresh?.();
+        }
+      } catch { /* ignore */ }
+    };
+    return () => evtSource.close();
+  }, [currentUser]);
 
   // Session management
   const [activeSessionId, setActiveSessionId] = useState<string | null>(chatSessions[0]?.id || null);
@@ -255,7 +291,9 @@ export const AIAssistant: React.FC<AIAssistantProps> = ({
       category: categories.find(c => c.id === b.categoryId)?.name || b.categoryId,
       limit: b.limit, account: b.account
     })),
-    savings: savings.map(s => ({ name: s.name, target: s.targetAmount, type: s.targetType }))
+    savings: savings.map(s => ({ name: s.name, target: s.targetAmount, type: s.targetType })),
+    categories: categories.map(c => ({ id: c.id, name: c.name, group: c.group, defaultAccount: c.defaultAccount })),
+    expenseContext: (currentUser as string) === 'shared' ? 'shared' : 'personal',
   });
 
   // Build conversation history for context window
@@ -284,10 +322,17 @@ export const AIAssistant: React.FC<AIAssistantProps> = ({
         const isPdf = pendingFile.mimeType === 'application/pdf';
         if (isPdf) {
           const owner = pendingOwner || (currentUser === 'user_1' ? 'USER_1' : 'USER_2');
+          const expenseContext = (currentUser as string) === 'shared' ? 'shared' : 'personal';
           const res = await fetch('/api/ai/parse-statement', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ attachmentBase64: pendingFile.base64, mimeType: pendingFile.mimeType, owner })
+            body: JSON.stringify({
+              attachmentBase64: pendingFile.base64,
+              mimeType: pendingFile.mimeType,
+              owner,
+              categories: categories.map(c => ({ id: c.id, name: c.name, group: c.group, defaultAccount: c.defaultAccount })),
+              expenseContext,
+            })
           });
           const data = await res.json();
           if (!res.ok) throw new Error(data.error || 'Parse failed');
@@ -314,12 +359,19 @@ export const AIAssistant: React.FC<AIAssistantProps> = ({
             text: transactions.length > 0 ? summary : 'Could not extract any transactions from this document.',
             transactions: transactions.length > 0 ? transactions : undefined,
             transactionOwner: owner,
+            pendingQuestions: (data.pendingQuestions && data.pendingQuestions.length > 0) ? data.pendingQuestions : undefined,
           }]);
         } else {
+          const expenseContext = (currentUser as string) === 'shared' ? 'shared' : 'personal';
           const res = await fetch('/api/ai/scan-receipt', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ imageBase64: pendingFile.base64, mimeType: pendingFile.mimeType })
+            body: JSON.stringify({
+              imageBase64: pendingFile.base64,
+              mimeType: pendingFile.mimeType,
+              categories: categories.map(c => ({ id: c.id, name: c.name, group: c.group, defaultAccount: c.defaultAccount })),
+              expenseContext,
+            })
           });
           const data = await res.json();
           if (!res.ok || data.error) throw new Error(data.error || 'Scan failed');
@@ -342,6 +394,17 @@ export const AIAssistant: React.FC<AIAssistantProps> = ({
         if (!res.ok) throw new Error(data.error || 'AI request failed');
 
         const reply: string = data.reply || '';
+        // Handle pending clarification questions from the AI
+        if (data.pendingQuestions && Array.isArray(data.pendingQuestions) && data.pendingQuestions.length > 0) {
+          setMessages(prev => [...prev, {
+            role: 'assistant',
+            text: reply || 'I need some clarification before I can continue:',
+            pendingQuestions: data.pendingQuestions,
+          }]);
+          setLoading(false);
+          setPendingFile(null); setPendingOwner(null); setShowOwnerPicker(false);
+          return;
+        }
         let displayReply = reply;
         try {
           const jsonMatch = reply.match(/\{[\s\S]*"action"[\s\S]*\}/);
@@ -403,10 +466,10 @@ export const AIAssistant: React.FC<AIAssistantProps> = ({
   const handleAddReceiptAsExpense = (receipt: ReceiptData) => {
     if (!onNavigateToExpense) return;
     let matchedCategoryId = categories[0]?.id;
-    if (receipt.suggestedCategory) {
+    if (receipt.categoryId) {
       const match = categories.find(c =>
-        c.name.toLowerCase().includes(receipt.suggestedCategory!.toLowerCase()) ||
-        receipt.suggestedCategory!.toLowerCase().includes(c.name.toLowerCase())
+        c.name.toLowerCase().includes(receipt.categoryId!.toLowerCase()) ||
+        receipt.categoryId!.toLowerCase().includes(c.name.toLowerCase())
       );
       if (match) matchedCategoryId = match.id;
     }
@@ -490,7 +553,7 @@ export const AIAssistant: React.FC<AIAssistantProps> = ({
     // Import expenses (net of any linked deductions)
     if (onAddEntries && expenseTxns.length > 0) {
       const newEntries: Omit<ExpenseEntry, 'id'>[] = expenseTxns.map(t => {
-        const categoryId = matchCategory(t.suggestedCategory);
+        const categoryId = matchCategory(t.categoryId);
         const cat = categories.find(c => c.id === categoryId);
         const account = owner === 'SHARED' ? (cat?.defaultAccount || 'SHARED') : owner;
         const entryMonth = t.date ? t.date.slice(0, 7) : importMonth;
@@ -520,7 +583,7 @@ export const AIAssistant: React.FC<AIAssistantProps> = ({
     // Import unlinked deductions as standalone negative entries
     if (onAddEntries && unlinkedDeductions.length > 0) {
       const deductionEntries: Omit<ExpenseEntry, 'id'>[] = unlinkedDeductions.map(t => {
-        const categoryId = matchCategory(t.suggestedCategory);
+        const categoryId = matchCategory(t.categoryId);
         const cat = categories.find(c => c.id === categoryId);
         const account = owner === 'SHARED' ? (cat?.defaultAccount || 'SHARED') : owner;
         const entryMonth = t.date ? t.date.slice(0, 7) : importMonth;
@@ -580,7 +643,7 @@ export const AIAssistant: React.FC<AIAssistantProps> = ({
     transactions.forEach((txn, idx) => {
       if (txn.txnType === 'salary') { groups['INCOME'].txns.push({ txn, idx }); return; }
       if (txn.txnType === 'deduction') { groups['DEDUCTIONS'].txns.push({ txn, idx }); return; }
-      const catId = matchCategory(txn.suggestedCategory);
+      const catId = matchCategory(txn.categoryId);
       const cat = categories.find(c => c.id === catId);
       if (!cat) { groups['OTHER'].txns.push({ txn, idx }); return; }
       if (cat.group === 'TRAVEL') groups['TRAVEL'].txns.push({ txn, idx });
@@ -603,6 +666,21 @@ export const AIAssistant: React.FC<AIAssistantProps> = ({
 
   return (
     <div className="space-y-4 max-w-3xl mx-auto">
+      {/* Session displacement warning banner */}
+      {isDisplaced && (
+        <div className={`flex items-center justify-between gap-3 px-4 py-3 rounded-xl border ${isDark ? 'bg-amber-950/50 border-amber-800/50 text-amber-300' : 'bg-amber-50 border-amber-200 text-amber-800'}`}>
+          <div className="flex items-center gap-2">
+            <WifiOff size={15} className="shrink-0" />
+            <span className="text-sm font-medium">You've been signed in from another tab or device.</span>
+          </div>
+          <button
+            onClick={() => { setIsDisplaced(false); sessionTokenRef.current = generateId(); }}
+            className="flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-lg bg-amber-600 text-white hover:bg-amber-700 transition shrink-0">
+            <RefreshCw size={12} /> Reconnect
+          </button>
+        </div>
+      )}
+
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
@@ -611,16 +689,61 @@ export const AIAssistant: React.FC<AIAssistantProps> = ({
           </div>
           <div>
             <h2 className={`text-xl font-bold ${isDark ? 'text-white' : 'text-slate-800'}`}>AI Assistant</h2>
-            <p className={`text-xs ${isDark ? 'text-slate-500' : 'text-slate-500'}`}>Chat, attach documents, or get spending insights</p>
+            <p className={`text-xs ${isDark ? 'text-slate-500' : 'text-slate-500'}`}>
+              {activeSession ? activeSession.name : 'Chat, attach documents, or get spending insights'}
+            </p>
           </div>
         </div>
         <div className="flex items-center gap-2">
+          <button onClick={() => setShowSettings(s => !s)}
+            className={`p-2 rounded-xl transition ${showSettings ? 'bg-indigo-100 text-indigo-600' : isDark ? 'bg-slate-800 text-slate-400 hover:text-slate-200' : 'bg-slate-100 text-slate-400 hover:text-slate-600'}`}
+            title="API Key & Model Settings">
+            <Settings size={16} />
+          </button>
           <button onClick={loadInsights} disabled={loading}
             className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold bg-indigo-600 text-white hover:bg-indigo-700 transition disabled:opacity-50">
             <BarChart3 size={14} /> Analyse
           </button>
         </div>
       </div>
+
+      {/* Per-user API key / model settings panel */}
+      {showSettings && (
+        <div className={`border rounded-xl p-4 space-y-3 ${isDark ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200'}`}>
+          <h3 className={`text-sm font-bold ${isDark ? 'text-slate-200' : 'text-slate-800'}`}>AI Settings — {currentUserName}</h3>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div>
+              <label className={`text-[10px] font-bold uppercase tracking-wider block mb-1 ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>Provider</label>
+              <select value={draftProvider || 'google'} onChange={e => setDraftProvider(e.target.value as UserSettings['provider'])}
+                className={`w-full text-sm border rounded-lg px-2 py-1.5 ${isDark ? 'bg-slate-800 border-slate-700 text-slate-200' : 'bg-white border-slate-300 text-slate-800'}`}>
+                <option value="google">Google (Gemini)</option>
+                <option value="openai">OpenAI-compatible</option>
+                <option value="anthropic">Anthropic (Claude)</option>
+              </select>
+            </div>
+            <div className="sm:col-span-2">
+              <label className={`text-[10px] font-bold uppercase tracking-wider block mb-1 ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>API Key</label>
+              <input type="password" value={draftApiKey} onChange={e => setDraftApiKey(e.target.value)}
+                placeholder="Paste your API key..."
+                className={`w-full text-sm border rounded-lg px-2 py-1.5 ${isDark ? 'bg-slate-800 border-slate-700 text-slate-200 placeholder-slate-600' : 'bg-white border-slate-300 text-slate-800 placeholder-slate-400'}`} />
+            </div>
+            <div className="sm:col-span-3">
+              <label className={`text-[10px] font-bold uppercase tracking-wider block mb-1 ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>Model (optional override)</label>
+              <input type="text" value={draftModel} onChange={e => setDraftModel(e.target.value)}
+                placeholder="e.g. gemini-2.0-flash, gpt-4o, claude-opus-4-6"
+                className={`w-full text-sm border rounded-lg px-2 py-1.5 ${isDark ? 'bg-slate-800 border-slate-700 text-slate-200 placeholder-slate-600' : 'bg-white border-slate-300 text-slate-800 placeholder-slate-400'}`} />
+            </div>
+          </div>
+          <div className="flex justify-end gap-2 pt-1">
+            <button onClick={() => setShowSettings(false)}
+              className={`text-xs px-3 py-1.5 rounded-lg border transition ${isDark ? 'border-slate-700 hover:bg-slate-800 text-slate-400' : 'border-slate-200 hover:bg-slate-50 text-slate-500'}`}>Cancel</button>
+            <button onClick={() => {
+              onUpdateUserSettings?.({ apiKey: draftApiKey || undefined, model: draftModel || undefined, provider: draftProvider });
+              setShowSettings(false);
+            }} className="text-xs font-bold px-3 py-1.5 rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 transition">Save</button>
+          </div>
+        </div>
+      )}
 
       {/* Session Tabs */}
       <div className="flex items-center gap-2 overflow-x-auto pb-1">
@@ -718,7 +841,7 @@ export const AIAssistant: React.FC<AIAssistantProps> = ({
                           ['Amount', msg.receiptData.amount !== null ? `${msg.receiptData.currency || currency} ${msg.receiptData.amount}` : '—'],
                           ['Date', msg.receiptData.date || '—'],
                           ['Description', msg.receiptData.description || '—'],
-                          ['Category', msg.receiptData.suggestedCategory || '—'],
+                          ['Category', msg.receiptData.categoryId || '—'],
                         ].map(([label, value]) => (
                           <div key={label}>
                             <p className={`text-[10px] font-bold uppercase tracking-wider ${isDark ? 'text-emerald-400' : 'text-emerald-600'}`}>{label}</p>
@@ -741,8 +864,20 @@ export const AIAssistant: React.FC<AIAssistantProps> = ({
                     const conflicts = findConflicts(msg.transactions, txnTargetMonth);
                     return (
                     <div className={`border rounded-xl overflow-hidden ${isDark ? 'border-slate-700' : 'border-slate-200'}`}>
-                      {/* Month picker header */}
-                      <div className={`px-3 py-2 flex items-center gap-2 border-b ${isDark ? 'border-slate-700 bg-slate-800/50' : 'border-slate-200 bg-slate-50'}`}>
+                      {/* Month + owner context header */}
+                      <div className={`px-3 py-2 flex items-center gap-2 flex-wrap border-b ${isDark ? 'border-slate-700 bg-slate-800/50' : 'border-slate-200 bg-slate-50'}`}>
+                        {/* Owner badge */}
+                        {msg.transactionOwner && (() => {
+                          const ownerKey = msg.transactionOwner === 'USER_1' ? 'user_1' : msg.transactionOwner === 'USER_2' ? 'user_2' : null;
+                          const ownerName = ownerKey ? (users[ownerKey]?.name || ownerKey) : 'Shared';
+                          const ownerColor = ownerKey ? (users[ownerKey]?.color || '#6366f1') : '#8b5cf6';
+                          return (
+                            <span className="flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full text-white shrink-0"
+                              style={{ backgroundColor: ownerColor }}>
+                              {ownerName}
+                            </span>
+                          );
+                        })()}
                         <span className={`text-[10px] font-bold uppercase tracking-wider ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>Target month:</span>
                         <input
                           type="month"
@@ -833,15 +968,15 @@ export const AIAssistant: React.FC<AIAssistantProps> = ({
                                         {isSalary ? (
                                           <span className={`text-[10px] font-semibold ${isDark ? 'text-emerald-400' : 'text-emerald-600'}`}>Income</span>
                                         ) : isEditing ? (
-                                          <select value={txn.suggestedCategory}
-                                            onChange={e => updateTransaction(i, txnIdx, { suggestedCategory: e.target.value })}
+                                          <select value={txn.categoryId}
+                                            onChange={e => updateTransaction(i, txnIdx, { categoryId: e.target.value })}
                                             className={`w-full text-xs border rounded px-1 py-0.5 ${isDark ? 'bg-slate-700 border-slate-600 text-slate-200' : 'bg-white border-slate-300'}`}>
                                             {categories.filter(c => c.group !== 'SAVINGS').map(c => (
                                               <option key={c.id} value={c.name}>{c.name}</option>
                                             ))}
                                           </select>
                                         ) : (
-                                          <span className="text-slate-500">{txn.suggestedCategory}</span>
+                                          <span className="text-slate-500">{txn.categoryId}</span>
                                         )}
                                         {isDeduction && (() => {
                                           // Expenses in the same import batch
@@ -961,6 +1096,32 @@ export const AIAssistant: React.FC<AIAssistantProps> = ({
                           <div>
                             <p className={`text-sm font-bold ${isDark ? 'text-slate-200' : 'text-slate-800'}`}>{ins.title}</p>
                             <p className={`text-xs mt-0.5 leading-relaxed ${isDark ? 'text-slate-400' : 'text-slate-600'}`}>{ins.body}</p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Pending clarification questions from AI */}
+                  {msg.pendingQuestions && msg.pendingQuestions.length > 0 && (
+                    <div className={`border rounded-xl p-3 space-y-3 ${isDark ? 'bg-indigo-950/40 border-indigo-800/50' : 'bg-indigo-50 border-indigo-200'}`}>
+                      <p className={`text-xs font-bold ${isDark ? 'text-indigo-300' : 'text-indigo-700'}`}>Clarification needed:</p>
+                      {msg.pendingQuestions.map((q, qi) => (
+                        <div key={qi} className="space-y-1.5">
+                          {q.transactionDescription && (
+                            <p className={`text-[10px] font-semibold uppercase tracking-wider ${isDark ? 'text-slate-500' : 'text-slate-400'}`}>{q.transactionDescription}</p>
+                          )}
+                          <p className={`text-sm ${isDark ? 'text-slate-200' : 'text-slate-800'}`}>{q.question}</p>
+                          <div className="flex flex-wrap gap-1.5">
+                            {q.options.map((opt, oi) => (
+                              <button key={oi}
+                                onClick={() => {
+                                  setInput(opt);
+                                }}
+                                className={`text-xs px-2.5 py-1 rounded-lg border font-medium transition ${isDark ? 'border-indigo-700 text-indigo-300 hover:bg-indigo-900' : 'border-indigo-300 text-indigo-700 hover:bg-indigo-100'}`}>
+                                {opt}
+                              </button>
+                            ))}
                           </div>
                         </div>
                       ))}

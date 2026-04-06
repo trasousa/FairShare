@@ -34,6 +34,14 @@ export interface ExpenseEntry {
   tripId?: string[]; // Optional: Links expense to one or more specific trips
   tripCategory?: 'FLIGHT' | 'ACCOMMODATION' | 'FOOD' | 'ACTIVITY' | 'OTHER'; // Specific to travel
   linkedExpenseId?: string; // For deduction/refund entries: the expense this offsets
+  updatedAt?: number; // Timestamp for optimistic concurrency
+}
+
+// Returned by parse-statement when AI is uncertain about a category mapping
+export interface PendingCategoryQuestion {
+  transactionDescription: string;
+  question: string;
+  options: string[]; // category IDs to choose from
 }
 
 export interface Category {
@@ -105,6 +113,12 @@ export interface ChatMessage {
     receiptDataJson?: string;
 }
 
+export interface UserSettings {
+    apiKey?: string;
+    model?: string;
+    provider?: 'google' | 'openai' | 'anthropic';
+}
+
 export interface AppInstance {
     id: string;
     name: string;
@@ -123,5 +137,6 @@ export interface AppInstance {
         incomes: IncomeEntry[];
         suggestions?: Suggestion[];
         chatSessions?: ChatSession[];
+        userSettings?: Record<string, UserSettings>;
     }
 }
