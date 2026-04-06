@@ -1,7 +1,16 @@
 /**
- * Generate a unique ID using crypto.randomUUID().
+ * Generate a unique ID. Uses crypto.randomUUID() when available (HTTPS),
+ * falls back to a Math.random-based UUID v4 for HTTP / older browsers.
  */
-export const generateId = (): string => crypto.randomUUID();
+export const generateId = (): string => {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID();
+  }
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+    const r = (Math.random() * 16) | 0;
+    return (c === 'x' ? r : (r & 0x3) | 0x8).toString(16);
+  });
+};
 
 /**
  * Safely check if entry's tripId contains a given trip ID.
