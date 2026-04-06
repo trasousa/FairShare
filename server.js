@@ -579,8 +579,13 @@ Extract all transactions from this document and respond ONLY with a valid JSON o
 }
 Rules:
 - Map each transaction to the most appropriate categoryId from the list above.
-- If confidence is "low" (ambiguous transaction), add an entry to pendingQuestions instead of guessing.
-- In pendingQuestions: transactionDescription must be the merchant/payee name (human readable, NOT an ID). options must be category names (human readable), NOT category IDs.
+- Set confidence "low" — and add to pendingQuestions — for ANY of these cases:
+  * The merchant name is a person's name, code, or reference number (not a shop/service)
+  * The transaction could belong to 2+ different categories equally
+  * It is unclear if it is a transfer, expense, or income
+  * The description is ambiguous (e.g. "MoneyBeam", cash withdrawal codes, bank references)
+  * Be generous with "low" — it is better to ask than to misclassify
+- In pendingQuestions: transactionDescription = the merchant/payee name as it appears (human readable). options = 2-4 category NAMES (human readable text, NOT IDs) the user can choose from.
 - Positive amounts are expenses/debits. Negative amounts are income/credits.
 - Parse ALL transactions. Be thorough.
 - If you cannot read the document, return {"error": "Cannot parse statement"}.`;
