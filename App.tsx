@@ -639,6 +639,7 @@ function App({ instanceId, currentUser, onExit }: AppProps) {
                   chatSessions={chatSessions}
                   onUpdateChatSessions={setChatSessions}
                   onDeleteEntries={(ids) => setEntries(prev => prev.filter(e => !ids.includes(e.id)))}
+                  onUpdateEntries={(updates) => setEntries(prev => prev.map(e => { const u = updates.find(u => u.id === e.id); return u ? { ...e, ...u } : e; }))}
                   onAddEntries={(newEntries) => setEntries(prev => [...prev, ...newEntries.map(e => ({ ...e, id: generateId() }))])}
                   onAddIncome={(source, amount, recipient, monthId) => setIncomes(prev => [...prev, { id: generateId(), monthId, source, amount, recipient, isRecurring: false }])}
                   onNavigateToExpense={(prefill) => {

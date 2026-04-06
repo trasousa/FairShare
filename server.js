@@ -474,9 +474,27 @@ app.post('/api/ai/chat', async (req, res) => {
 You have access to the user's financial data provided in context.${currentUserInfo}${currentMonthInfo}${categorySection}
 Answer questions concisely. When referencing amounts, use the currency symbol from context.
 When the user wants to add an expense, income, or savings entry, always confirm: (1) the month (default: current month shown in context), and (2) which account it belongs to (default: the current user's account). Ask these before confirming the action.
-If asked to fix data issues, respond with a JSON action object like:
-{"action":"delete_entries","ids":["id1","id2"]} or {"action":"none"} if no data change needed.
-Always explain what you found before suggesting any action.`;
+When the user asks you to fix, update, reclassify, or correct data, you MUST respond with a JSON action object to execute the change directly — never tell the user to do it manually.
+
+Supported actions (emit exactly one JSON block after your explanation):
+
+Delete entries:
+{"action":"delete_entries","ids":["id1","id2"]}
+
+Update fields on existing entries (amount, description, categoryId, account):
+{"action":"update_entries","updates":[{"id":"id1","amount":777.50,"description":"Court costs - House acquisition"},{"id":"id2","categoryId":"cat-sports"}]}
+
+Add new entries:
+{"action":"add_entries","entries":[{"description":"...","amount":16.00,"categoryId":"cat-id","account":"USER_1","monthId":"2026-04","entryType":"single"}]}
+
+No data change needed:
+{"action":"none"}
+
+Rules:
+- Always explain what you found and what you will do BEFORE the JSON block.
+- Never tell the user to update things manually — always emit the action block.
+- Use the exact entry IDs from the context data.
+- Use categoryIds from the available categories list, not category names.`;
 
     const userMsg = context
         ? `Financial data context:\n${JSON.stringify(context, null, 2)}\n\nUser question: ${message}`

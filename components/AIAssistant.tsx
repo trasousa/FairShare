@@ -64,6 +64,7 @@ interface AIAssistantProps {
   chatSessions: ChatSession[];
   onUpdateChatSessions: (sessions: ChatSession[]) => void;
   onDeleteEntries?: (ids: string[]) => void;
+  onUpdateEntries?: (updates: Array<{ id: string } & Partial<ExpenseEntry>>) => void;
   onAddEntries?: (entries: Omit<ExpenseEntry, 'id'>[]) => void;
   onAddIncome?: (source: string, amount: number, recipient: AccountType, monthId: string) => void;
   onNavigateToExpense?: (prefill: Partial<ExpenseEntry>) => void;
@@ -138,7 +139,7 @@ function renderMarkdown(text: string, isDark: boolean): React.ReactNode {
 }
 
 export const AIAssistant: React.FC<AIAssistantProps> = ({
-  entries, categories, trips, incomes, budgets, savings, users, currency, theme = 'light', currentUser, instanceId, chatSessions, onUpdateChatSessions, onDeleteEntries, onAddEntries, onAddIncome, onNavigateToExpense, userSettings, onUpdateUserSettings, onRefresh
+  entries, categories, trips, incomes, budgets, savings, users, currency, theme = 'light', currentUser, instanceId, chatSessions, onUpdateChatSessions, onDeleteEntries, onUpdateEntries, onAddEntries, onAddIncome, onNavigateToExpense, userSettings, onUpdateUserSettings, onRefresh
 }) => {
   const currentUserName = users[currentUser]?.name || currentUser;
   const isDark = theme === 'dark';
@@ -410,9 +411,31 @@ export const AIAssistant: React.FC<AIAssistantProps> = ({
           const jsonMatch = reply.match(/\{[\s\S]*"action"[\s\S]*\}/);
           if (jsonMatch) {
             const action = JSON.parse(jsonMatch[0]);
+            const textPart = reply.replace(jsonMatch[0], '').trim();
             if (action.action === 'delete_entries' && action.ids?.length && onDeleteEntries) {
-              const textPart = reply.replace(jsonMatch[0], '').trim();
-              displayReply = textPart + `\n\n_Action available: delete ${action.ids.length} entries. [Confirm below]_`;
+              displayReply = textPart + `\n\n_Action: delete ${action.ids.length} entr${action.ids.length === 1 ? 'y' : 'ies'}. [Confirm below]_`;
+              setMessages(prev => [...prev,
+                { role: 'assistant', text: displayReply },
+                { role: 'assistant', text: `__ACTION__${JSON.stringify(action)}` }
+              ]);
+              setLoading(false);
+              setPendingFile(null); setPendingOwner(null); setShowOwnerPicker(false);
+              return;
+            }
+            if (action.action === 'update_entries' && action.updates?.length && onUpdateEntries) {
+              const count = action.updates.length;
+              displayReply = textPart + `\n\n_Action: update ${count} entr${count === 1 ? 'y' : 'ies'}. [Confirm below]_`;
+              setMessages(prev => [...prev,
+                { role: 'assistant', text: displayReply },
+                { role: 'assistant', text: `__ACTION__${JSON.stringify(action)}` }
+              ]);
+              setLoading(false);
+              setPendingFile(null); setPendingOwner(null); setShowOwnerPicker(false);
+              return;
+            }
+            if (action.action === 'add_entries' && action.entries?.length && onAddEntries) {
+              const count = action.entries.length;
+              displayReply = textPart + `\n\n_Action: add ${count} entr${count === 1 ? 'y' : 'ies'}. [Confirm below]_`;
               setMessages(prev => [...prev,
                 { role: 'assistant', text: displayReply },
                 { role: 'assistant', text: `__ACTION__${JSON.stringify(action)}` }
@@ -794,17 +817,51 @@ export const AIAssistant: React.FC<AIAssistantProps> = ({
           {messages.map((msg, i) => {
             if (msg.text.startsWith('__ACTION__')) {
               const action = JSON.parse(msg.text.replace('__ACTION__', ''));
-              return (
-                <div key={i} className={`${isDark ? 'bg-amber-950/50 border-amber-800/50' : 'bg-amber-50 border-amber-200'} border rounded-xl p-3 flex items-center justify-between gap-3`}>
-                  <p className={`text-xs font-medium ${isDark ? 'text-amber-300' : 'text-amber-800'}`}>Delete {action.ids.length} entries?</p>
-                  <div className="flex gap-2">
-                    <button onClick={() => { onDeleteEntries?.(action.ids); setMessages(prev => prev.filter((_, j) => j !== i).concat({ role: 'assistant', text: `Deleted ${action.ids.length} entries.` })); }}
-                      className="text-xs font-bold bg-red-600 text-white px-3 py-1.5 rounded-lg hover:bg-red-700 transition">Confirm</button>
-                    <button onClick={() => setMessages(prev => prev.filter((_, j) => j !== i))}
-                      className={`text-xs border px-3 py-1.5 rounded-lg transition ${isDark ? 'border-slate-700 hover:bg-slate-800' : 'border-slate-200 hover:bg-slate-50'}`}>Dismiss</button>
+              const dismiss = () => setMessages(prev => prev.filter((_, j) => j !== i));
+
+              if (action.action === 'delete_entries') {
+                const count = action.ids.length;
+                return (
+                  <div key={i} className={`${isDark ? 'bg-red-950/50 border-red-800/50' : 'bg-red-50 border-red-200'} border rounded-xl p-3 flex items-center justify-between gap-3`}>
+                    <p className={`text-xs font-medium ${isDark ? 'text-red-300' : 'text-red-800'}`}>Delete {count} entr{count === 1 ? 'y' : 'ies'}?</p>
+                    <div className="flex gap-2">
+                      <button onClick={() => { onDeleteEntries?.(action.ids); setMessages(prev => prev.filter((_, j) => j !== i).concat({ role: 'assistant', text: `Deleted ${count} entr${count === 1 ? 'y' : 'ies'}.` })); }}
+                        className="text-xs font-bold bg-red-600 text-white px-3 py-1.5 rounded-lg hover:bg-red-700 transition">Confirm</button>
+                      <button onClick={dismiss} className={`text-xs border px-3 py-1.5 rounded-lg transition ${isDark ? 'border-slate-700 hover:bg-slate-800' : 'border-slate-200 hover:bg-slate-50'}`}>Dismiss</button>
+                    </div>
                   </div>
-                </div>
-              );
+                );
+              }
+
+              if (action.action === 'update_entries') {
+                const count = action.updates.length;
+                return (
+                  <div key={i} className={`${isDark ? 'bg-amber-950/50 border-amber-800/50' : 'bg-amber-50 border-amber-200'} border rounded-xl p-3 flex items-center justify-between gap-3`}>
+                    <p className={`text-xs font-medium ${isDark ? 'text-amber-300' : 'text-amber-800'}`}>Update {count} entr{count === 1 ? 'y' : 'ies'}?</p>
+                    <div className="flex gap-2">
+                      <button onClick={() => { onUpdateEntries?.(action.updates); setMessages(prev => prev.filter((_, j) => j !== i).concat({ role: 'assistant', text: `Updated ${count} entr${count === 1 ? 'y' : 'ies'}.` })); }}
+                        className="text-xs font-bold bg-amber-600 text-white px-3 py-1.5 rounded-lg hover:bg-amber-700 transition">Confirm</button>
+                      <button onClick={dismiss} className={`text-xs border px-3 py-1.5 rounded-lg transition ${isDark ? 'border-slate-700 hover:bg-slate-800' : 'border-slate-200 hover:bg-slate-50'}`}>Dismiss</button>
+                    </div>
+                  </div>
+                );
+              }
+
+              if (action.action === 'add_entries') {
+                const count = action.entries.length;
+                return (
+                  <div key={i} className={`${isDark ? 'bg-green-950/50 border-green-800/50' : 'bg-green-50 border-green-200'} border rounded-xl p-3 flex items-center justify-between gap-3`}>
+                    <p className={`text-xs font-medium ${isDark ? 'text-green-300' : 'text-green-800'}`}>Add {count} entr{count === 1 ? 'y' : 'ies'}?</p>
+                    <div className="flex gap-2">
+                      <button onClick={() => { onAddEntries?.(action.entries); setMessages(prev => prev.filter((_, j) => j !== i).concat({ role: 'assistant', text: `Added ${count} entr${count === 1 ? 'y' : 'ies'}.` })); }}
+                        className="text-xs font-bold bg-green-600 text-white px-3 py-1.5 rounded-lg hover:bg-green-700 transition">Confirm</button>
+                      <button onClick={dismiss} className={`text-xs border px-3 py-1.5 rounded-lg transition ${isDark ? 'border-slate-700 hover:bg-slate-800' : 'border-slate-200 hover:bg-slate-50'}`}>Dismiss</button>
+                    </div>
+                  </div>
+                );
+              }
+
+              return null;
             }
 
             return (
