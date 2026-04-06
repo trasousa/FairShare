@@ -870,7 +870,7 @@ export const AIAssistant: React.FC<AIAssistantProps> = ({
       </div>
 
       {/* Chat Area */}
-      <div className={`${cardBg} border rounded-xl flex flex-col`} style={{ height: '480px' }}>
+      <div className={`${cardBg} border rounded-xl flex flex-col`} style={{ height: '640px' }}>
         <div className="flex-1 overflow-y-auto p-4 space-y-3">
           {messages.map((msg, i) => {
             if (msg.text.startsWith('__ACTION__')) {
@@ -1086,12 +1086,18 @@ export const AIAssistant: React.FC<AIAssistantProps> = ({
                                           <select value={txn.categoryId}
                                             onChange={e => updateTransaction(i, txnIdx, { categoryId: e.target.value })}
                                             className={`w-full text-xs border rounded px-1 py-0.5 ${isDark ? 'bg-slate-700 border-slate-600 text-slate-200' : 'bg-white border-slate-300'}`}>
-                                            {categories.filter(c => c.group !== 'SAVINGS').map(c => (
-                                              <option key={c.id} value={c.name}>{c.name}</option>
-                                            ))}
+                                            {(['FIXED','VARIABLE','LIFESTYLE','SAVINGS','TRAVEL'] as const)
+                                              .filter(g => categories.some(c => c.group === g))
+                                              .map(g => (
+                                                <optgroup key={g} label={g.charAt(0) + g.slice(1).toLowerCase()}>
+                                                  {categories.filter(c => c.group === g).map(c => (
+                                                    <option key={c.id} value={c.id}>{c.name}</option>
+                                                  ))}
+                                                </optgroup>
+                                              ))}
                                           </select>
                                         ) : (
-                                          <span className="text-slate-500">{txn.categoryId}</span>
+                                          <span className="text-slate-500">{categories.find(c => c.id === txn.categoryId)?.name || txn.categoryId}</span>
                                         )}
                                         {isDeduction && (() => {
                                           // Expenses in the same import batch
@@ -1161,6 +1167,11 @@ export const AIAssistant: React.FC<AIAssistantProps> = ({
                                             <button onClick={() => setEditingTxn({ msgIdx: i, txnIdx })}
                                               className={`opacity-0 group-hover/row:opacity-100 transition ${isDark ? 'text-slate-500 hover:text-slate-300' : 'text-slate-300 hover:text-slate-500'}`}>
                                               <Edit3 size={11} />
+                                            </button>
+                                            <button onClick={() => updateTransaction(i, txnIdx, { skipped: true })}
+                                              title="Remove row"
+                                              className={`opacity-0 group-hover/row:opacity-100 transition ${isDark ? 'text-slate-600 hover:text-red-400' : 'text-slate-300 hover:text-red-400'}`}>
+                                              <X size={11} />
                                             </button>
                                           </div>
                                         )}
