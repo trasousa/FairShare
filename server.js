@@ -401,7 +401,7 @@ async function callAI(systemPrompt, userMessage, imageBase64 = null, imageMimeTy
         const body = {
             system_instruction: { parts: [{ text: systemPrompt }] },
             contents,
-            generationConfig: { temperature: 0.3, maxOutputTokens: 2048 }
+            generationConfig: { temperature: 0.3, maxOutputTokens: 8192 }
         };
         const res = await fetch(url, {
             method: 'POST',
@@ -434,7 +434,7 @@ async function callAI(systemPrompt, userMessage, imageBase64 = null, imageMimeTy
     const res = await fetch(`${aiConfig.baseUrl}/chat/completions`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${aiConfig.apiKey}` },
-        body: JSON.stringify({ model: aiConfig.model, messages, temperature: 0.3, max_tokens: 2048 })
+        body: JSON.stringify({ model: aiConfig.model, messages, temperature: 0.3, max_tokens: 8192 })
     });
     if (!res.ok) {
         const err = await res.text();
@@ -530,6 +530,7 @@ If you cannot read the receipt, return {"error": "Cannot read receipt"}.`;
     try {
         const raw = await callAI(systemPrompt, 'Parse this receipt.', imageBase64, mimeType || 'image/jpeg');
         const cleaned = raw.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+        if (!cleaned) throw new Error('AI returned an empty response');
         const parsed = JSON.parse(cleaned);
         res.json(parsed);
     } catch (e) {
@@ -551,6 +552,7 @@ Focus on: budget overruns, unusual spikes, savings opportunities, unbalanced con
     try {
         const raw = await callAI(systemPrompt, `Analyse this financial data:\n${JSON.stringify(context, null, 2)}`);
         const cleaned = raw.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+        if (!cleaned) throw new Error('AI returned an empty response');
         const insights = JSON.parse(cleaned);
         res.json({ insights });
     } catch (e) {
@@ -585,6 +587,7 @@ Rules:
     try {
         const raw = await callAI(systemPrompt, 'Parse all transactions from this bank statement.', attachmentBase64, mimeType || 'application/pdf');
         const cleaned = raw.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+        if (!cleaned) throw new Error('AI returned an empty response');
         const parsed = JSON.parse(cleaned);
         if (parsed.error) {
             res.status(422).json({ error: parsed.error });

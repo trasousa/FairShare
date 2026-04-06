@@ -746,7 +746,7 @@ export const AIAssistant: React.FC<AIAssistantProps> = ({
   };
 
   return (
-    <div className="space-y-4 max-w-3xl mx-auto">
+    <div className="space-y-4 max-w-5xl mx-auto">
       {/* Session displacement warning banner */}
       {isDisplaced && (
         <div className={`flex items-center justify-between gap-3 px-4 py-3 rounded-xl border ${isDark ? 'bg-amber-950/50 border-amber-800/50 text-amber-300' : 'bg-amber-50 border-amber-200 text-amber-800'}`}>
@@ -870,7 +870,7 @@ export const AIAssistant: React.FC<AIAssistantProps> = ({
       </div>
 
       {/* Chat Area */}
-      <div className={`${cardBg} border rounded-xl flex flex-col`} style={{ height: '640px' }}>
+      <div className={`${cardBg} border rounded-xl flex flex-col`} style={{ height: '480px' }}>
         <div className="flex-1 overflow-y-auto p-4 space-y-3">
           {messages.map((msg, i) => {
             if (msg.text.startsWith('__ACTION__')) {
