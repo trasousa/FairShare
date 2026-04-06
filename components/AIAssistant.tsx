@@ -474,17 +474,35 @@ export const AIAssistant: React.FC<AIAssistantProps> = ({
     const salaryTxns = filteredTxns.filter(t => t.txnType === 'salary');
     const deductionTxns = filteredTxns.filter(t => t.txnType === 'deduction');
 
-    // Import expenses
+    // Build a map: batchIndex (string) -> deduction amount for linked deductions
+    // linkedExpenseId on a ParsedTransaction stores the string index of the linked expense in the original array
+    const deductionsByLinkedIdx = new Map<string, number>();
+    const unlinkedDeductions: ParsedTransaction[] = [];
+    for (const d of deductionTxns) {
+      if (d.linkedExpenseId) {
+        const prev = deductionsByLinkedIdx.get(d.linkedExpenseId) ?? 0;
+        deductionsByLinkedIdx.set(d.linkedExpenseId, prev + Math.abs(d.amount));
+      } else {
+        unlinkedDeductions.push(d);
+      }
+    }
+
+    // Import expenses (net of any linked deductions)
     if (onAddEntries && expenseTxns.length > 0) {
       const newEntries: Omit<ExpenseEntry, 'id'>[] = expenseTxns.map(t => {
         const categoryId = matchCategory(t.suggestedCategory);
         const cat = categories.find(c => c.id === categoryId);
         const account = owner === 'SHARED' ? (cat?.defaultAccount || 'SHARED') : owner;
         const entryMonth = t.date ? t.date.slice(0, 7) : importMonth;
+        const batchIdx = String(transactions.indexOf(t));
+        const linkedDeduction = deductionsByLinkedIdx.get(batchIdx) ?? 0;
+        const netAmount = Math.max(0, Math.abs(t.amount) - linkedDeduction);
+        const desc = linkedDeduction > 0
+          ? `${t.description} (net after ${sym}${linkedDeduction.toFixed(2)} refund)`
+          : (t.comment ? `${t.description} — ${t.comment}` : t.description);
         return {
-          monthId: entryMonth, categoryId, amount: Math.abs(t.amount), account,
-          description: t.comment ? `${t.description} — ${t.comment}` : t.description,
-          date: t.date || undefined, entryType: 'single' as const,
+          monthId: entryMonth, categoryId, amount: netAmount, account,
+          description: desc, date: t.date || undefined, entryType: 'single' as const,
         };
       });
       onAddEntries(newEntries);
@@ -499,28 +517,29 @@ export const AIAssistant: React.FC<AIAssistantProps> = ({
       }
     }
 
-    // Import deductions as negative expenses (reduces total for that category)
-    if (onAddEntries && deductionTxns.length > 0) {
-      const deductionEntries: Omit<ExpenseEntry, 'id'>[] = deductionTxns.map(t => {
+    // Import unlinked deductions as standalone negative entries
+    if (onAddEntries && unlinkedDeductions.length > 0) {
+      const deductionEntries: Omit<ExpenseEntry, 'id'>[] = unlinkedDeductions.map(t => {
         const categoryId = matchCategory(t.suggestedCategory);
         const cat = categories.find(c => c.id === categoryId);
         const account = owner === 'SHARED' ? (cat?.defaultAccount || 'SHARED') : owner;
         const entryMonth = t.date ? t.date.slice(0, 7) : importMonth;
         return {
           monthId: entryMonth, categoryId, amount: -Math.abs(t.amount), account,
-          description: t.comment ? `${t.description} (refund/deduction) — ${t.comment}` : `${t.description} (refund/deduction)`,
+          description: t.comment ? `${t.description} (refund) — ${t.comment}` : `${t.description} (refund)`,
           date: t.date || undefined, entryType: 'single' as const,
-          linkedExpenseId: t.linkedExpenseId,
         };
       });
       onAddEntries(deductionEntries);
     }
 
     // Build summary
+    const linkedCount = deductionTxns.length - unlinkedDeductions.length;
     const parts: string[] = [];
     if (expenseTxns.length > 0) parts.push(`${expenseTxns.length} expenses`);
     if (salaryTxns.length > 0) parts.push(`${salaryTxns.length} income/salary entries`);
-    if (deductionTxns.length > 0) parts.push(`${deductionTxns.length} deductions/refunds`);
+    if (linkedCount > 0) parts.push(`${linkedCount} refund${linkedCount > 1 ? 's' : ''} applied to expenses`);
+    if (unlinkedDeductions.length > 0) parts.push(`${unlinkedDeductions.length} standalone refund${unlinkedDeductions.length > 1 ? 's' : ''}`);
 
     setMessages(prev => [...prev, {
       role: 'assistant',
@@ -824,24 +843,43 @@ export const AIAssistant: React.FC<AIAssistantProps> = ({
                                         ) : (
                                           <span className="text-slate-500">{txn.suggestedCategory}</span>
                                         )}
-                                        {isDeduction && (
-                                          <select
-                                            value={txn.linkedExpenseId || ''}
-                                            onChange={e => updateTransaction(i, txnIdx, { linkedExpenseId: e.target.value || undefined })}
-                                            title="Link to expense to offset it"
-                                            className={`mt-1 w-full text-[9px] border rounded px-1 py-0.5 ${isDark ? 'bg-slate-700 border-slate-600 text-slate-400' : 'bg-white border-slate-300 text-slate-500'}`}>
-                                            <option value="">↩ link to expense…</option>
-                                            {entries
-                                              .filter(e => e.amount > 0 && e.entryType === 'single')
-                                              .sort((a, b) => (b.date || b.monthId).localeCompare(a.date || a.monthId))
-                                              .slice(0, 30)
-                                              .map(e => (
-                                                <option key={e.id} value={e.id}>
-                                                  {e.description?.slice(0, 22) || categories.find(c => c.id === e.categoryId)?.name} — {sym}{e.amount.toFixed(2)}
-                                                </option>
-                                              ))}
-                                          </select>
-                                        )}
+                                        {isDeduction && (() => {
+                                          // Expenses in the same import batch
+                                          const batchExpenses = msg.transactions!
+                                            .map((t, bIdx) => ({ t, bIdx }))
+                                            .filter(({ t }) => t.txnType === 'expense' || (!t.txnType && t.amount > 0));
+                                          // Also show existing entries in the target month
+                                          const monthEntries = entries
+                                            .filter(e => e.amount > 0 && e.entryType === 'single' && e.monthId === txnTargetMonth)
+                                            .slice(0, 20);
+                                          return (
+                                            <select
+                                              value={txn.linkedExpenseId || ''}
+                                              onChange={e => updateTransaction(i, txnIdx, { linkedExpenseId: e.target.value || undefined })}
+                                              title="Apply refund to this expense"
+                                              className={`mt-1 w-full text-[9px] border rounded px-1 py-0.5 ${isDark ? 'bg-slate-700 border-slate-600 text-slate-400' : 'bg-white border-slate-300 text-slate-500'}`}>
+                                              <option value="">↩ apply to expense…</option>
+                                              {batchExpenses.length > 0 && (
+                                                <optgroup label="This import">
+                                                  {batchExpenses.map(({ t: bt, bIdx }) => (
+                                                    <option key={bIdx} value={String(bIdx)}>
+                                                      {bt.description.slice(0, 24)} — {sym}{Math.abs(bt.amount).toFixed(2)}
+                                                    </option>
+                                                  ))}
+                                                </optgroup>
+                                              )}
+                                              {monthEntries.length > 0 && (
+                                                <optgroup label={`${txnTargetMonth} entries`}>
+                                                  {monthEntries.map(e => (
+                                                    <option key={e.id} value={e.id}>
+                                                      {(e.description || categories.find(c => c.id === e.categoryId)?.name || '').slice(0, 24)} — {sym}{e.amount.toFixed(2)}
+                                                    </option>
+                                                  ))}
+                                                </optgroup>
+                                              )}
+                                            </select>
+                                          );
+                                        })()}
                                       </td>
                                       <td className="px-1 py-1.5 w-20">
                                         {isEditing ? (
