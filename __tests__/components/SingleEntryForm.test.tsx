@@ -27,6 +27,7 @@ const defaultProps = {
   users: mockUsers,
   currency: 'USD' as const,
   theme: 'light' as const,
+  currentUser: 'user_1' as const,
   getInputClass: () => 'w-full border rounded-lg p-2.5',
   onAddEntry: vi.fn(),
 };
@@ -46,7 +47,7 @@ describe('SingleEntryForm', () => {
     await userEvent.type(screen.getByPlaceholderText('0.00'), '50');
     await userEvent.type(screen.getByPlaceholderText("e.g. Dinner at Mario's"), 'Test expense');
 
-    const submitButton = screen.getByText('Add Transaction');
+    const submitButton = screen.getByText('Add Expense');
     await userEvent.click(submitButton);
 
     expect(onAddEntry).toHaveBeenCalledOnce();
@@ -85,7 +86,7 @@ describe('SingleEntryForm', () => {
     await userEvent.type(screen.getByPlaceholderText("e.g. Dinner at Mario's"), 'Flight');
 
     // Try to submit without selecting a trip
-    await userEvent.click(screen.getByText('Add Transaction'));
+    await userEvent.click(screen.getByText('Add Expense'));
 
     expect(window.alert).toHaveBeenCalledWith('Please select at least one Trip for this travel expense.');
     expect(onAddEntry).not.toHaveBeenCalled();

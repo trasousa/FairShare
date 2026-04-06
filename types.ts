@@ -1,4 +1,5 @@
 export type UserId = 'user_1' | 'user_2' | 'shared';
+export type CurrentUserId = 'user_1' | 'user_2';
 export type AccountType = 'SHARED' | 'USER_1' | 'USER_2';
 export type SplitType = 'DYNAMIC' | 'EQUAL' | 'PERSONAL';
 export type TimeRange = 'THIS_MONTH' | 'LAST_3_MONTHS' | 'LAST_6_MONTHS' | 'LAST_12_MONTHS' | 'THIS_YEAR' | 'ALL_TIME';
@@ -32,6 +33,7 @@ export interface ExpenseEntry {
   entryType: 'worksheet' | 'single'; // Distinguish between bulk totals and specific items
   tripId?: string[]; // Optional: Links expense to one or more specific trips
   tripCategory?: 'FLIGHT' | 'ACCOMMODATION' | 'FOOD' | 'ACTIVITY' | 'OTHER'; // Specific to travel
+  linkedExpenseId?: string; // For deduction/refund entries: the expense this offsets
 }
 
 export interface Category {
@@ -82,6 +84,27 @@ export interface Suggestion {
     timestamp: number;
 }
 
+export interface ChatSession {
+    id: string;
+    name: string;
+    messages: ChatMessage[];
+    createdAt: number;
+    updatedAt: number;
+}
+
+export interface ChatMessage {
+    role: 'user' | 'assistant';
+    text: string;
+    isError?: boolean;
+    attachment?: { name: string; type: 'image' | 'pdf' };
+    // Structured data stored as JSON strings to keep type simple for persistence
+    transactionsJson?: string;
+    transactionOwner?: string;
+    targetMonth?: string;
+    insightsJson?: string;
+    receiptDataJson?: string;
+}
+
 export interface AppInstance {
     id: string;
     name: string;
@@ -99,5 +122,6 @@ export interface AppInstance {
         trips: Trip[];
         incomes: IncomeEntry[];
         suggestions?: Suggestion[];
+        chatSessions?: ChatSession[];
     }
 }

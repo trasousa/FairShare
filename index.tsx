@@ -3,15 +3,23 @@ import ReactDOM from 'react-dom/client';
 import App from './App';
 import { LandingPage } from './components/LandingPage';
 import { Onboarding } from './components/Onboarding';
+import { UserSelector } from './components/UserSelector';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { ToastProvider } from './components/Toast';
+import { CurrentUserId } from './types';
 
 const Root = () => {
-    const [view, setView] = useState<'LANDING' | 'ONBOARDING' | 'APP'>('LANDING');
+    const [view, setView] = useState<'LANDING' | 'ONBOARDING' | 'USER_SELECT' | 'APP'>('LANDING');
     const [activeInstanceId, setActiveInstanceId] = useState<string | null>(null);
+    const [currentUser, setCurrentUser] = useState<CurrentUserId | null>(null);
 
     const handleSelectInstance = (id: string) => {
         setActiveInstanceId(id);
+        setView('USER_SELECT');
+    };
+
+    const handleUserSelected = (userId: CurrentUserId) => {
+        setCurrentUser(userId);
         setView('APP');
     };
 
@@ -21,18 +29,31 @@ const Root = () => {
 
     const handleOnboardingComplete = (id: string) => {
         setActiveInstanceId(id);
-        setView('APP');
+        setView('USER_SELECT');
     };
 
     const handleExitApp = () => {
         setActiveInstanceId(null);
+        setCurrentUser(null);
         setView('LANDING');
     };
 
-    if (view === 'APP' && activeInstanceId) {
+    if (view === 'APP' && activeInstanceId && currentUser) {
         return (
             <ErrorBoundary componentName="App">
-                <App instanceId={activeInstanceId} onExit={handleExitApp} />
+                <App instanceId={activeInstanceId} currentUser={currentUser} onExit={handleExitApp} />
+            </ErrorBoundary>
+        );
+    }
+
+    if (view === 'USER_SELECT' && activeInstanceId) {
+        return (
+            <ErrorBoundary componentName="UserSelector">
+                <UserSelector
+                    instanceId={activeInstanceId}
+                    onSelect={handleUserSelected}
+                    onBack={() => { setActiveInstanceId(null); setView('LANDING'); }}
+                />
             </ErrorBoundary>
         );
     }

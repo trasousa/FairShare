@@ -18,7 +18,7 @@ import {
   Sparkles
 } from 'lucide-react';
 
-import { ExpenseEntry, AccountType, Budget, SavingsGoal, Category, TimeRange, Trip, IncomeEntry, User, UserId, AppInstance, CurrencyCode, Suggestion } from './types';
+import { ExpenseEntry, AccountType, Budget, SavingsGoal, Category, TimeRange, Trip, IncomeEntry, User, UserId, AppInstance, CurrencyCode, Suggestion, CurrentUserId, ChatSession } from './types';
 import { MonthlyWorksheet } from './components/MonthlyWorksheet';
 import { SingleEntryForm } from './components/SingleEntryForm';
 import { DashboardCharts } from './components/DashboardCharts';
@@ -51,10 +51,11 @@ function mergeById<T extends { id: string }>(local: T[], server: T[]): T[] {
 
 interface AppProps {
     instanceId: string;
+    currentUser: CurrentUserId;
     onExit: () => void;
 }
 
-function App({ instanceId, onExit }: AppProps) {
+function App({ instanceId, currentUser, onExit }: AppProps) {
   const [loading, setLoading] = useState(true);
   const [easterEggCount, setEasterEggCount] = useState(0);
   const [showEasterEgg, setShowEasterEgg] = useState(false);
@@ -96,6 +97,8 @@ function App({ instanceId, onExit }: AppProps) {
   const [savings, setSavings] = useState<SavingsGoal[]>([]);
   const [trips, setTrips] = useState<Trip[]>([]);
   const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
+  const [chatSessions, setChatSessions] = useState<ChatSession[]>([]);
+  const [prefillData, setPrefillData] = useState<Partial<ExpenseEntry> | null>(null);
 
   // Close dropdowns on outside click
   useEffect(() => {
@@ -137,6 +140,7 @@ function App({ instanceId, onExit }: AppProps) {
             // Normalize trips: ensure account defaults to SHARED
             setTrips(data.data.trips.map(t => ({ ...t, account: t.account || 'SHARED' })));
             setSuggestions(data.data.suggestions || []);
+            setChatSessions(data.data.chatSessions || []);
             setLastUpdated(data.lastUpdated || 0);
             setCreatedTimestamp(data.created || Date.now());
             setLoading(false);
@@ -164,6 +168,7 @@ function App({ instanceId, onExit }: AppProps) {
                   setSavings(prev => mergeById(prev, data.data.savings));
                   setTrips(prev => mergeById(prev, data.data.trips.map((t: Trip) => ({ ...t, account: t.account || 'SHARED' }))));
                   setSuggestions(prev => mergeById(prev, data.data.suggestions || []));
+                  setChatSessions(prev => mergeById(prev, data.data.chatSessions || []));
                   setLastUpdated(data.lastUpdated);
                   toast('Synced changes from another device', 'info');
               }
@@ -201,7 +206,8 @@ function App({ instanceId, onExit }: AppProps) {
                       savings,
                       trips,
                       incomes,
-                      suggestions
+                      suggestions,
+                      chatSessions
                   }
               };
               const result = await saveInstance(updatedInstance);
@@ -220,6 +226,7 @@ function App({ instanceId, onExit }: AppProps) {
                       setSavings(prev => mergeById(prev, data.data.savings));
                       setTrips(prev => mergeById(prev, data.data.trips.map((t: Trip) => ({ ...t, account: t.account || 'SHARED' }))));
                       setSuggestions(prev => mergeById(prev, data.data.suggestions || []));
+                      setChatSessions(prev => mergeById(prev, data.data.chatSessions || []));
                       setLastUpdated(data.lastUpdated || 0);
                       toast('Merged changes from server', 'info');
                   }
@@ -235,7 +242,7 @@ function App({ instanceId, onExit }: AppProps) {
       const timeoutId = setTimeout(saveData, 500); 
       return () => clearTimeout(timeoutId);
 
-  }, [entries, incomes, categories, budgets, savings, trips, suggestions, users, currency, theme, loading, instanceName]);
+  }, [entries, incomes, categories, budgets, savings, trips, suggestions, chatSessions, users, currency, theme, loading, instanceName]);
 
   const changeMonth = (direction: -1 | 1) => {
       const [year, month] = currentMonth.split('-').map(Number);
@@ -561,7 +568,7 @@ function App({ instanceId, onExit }: AppProps) {
                         />
                     )}
                     {activeRegisterView === 'single' && (
-                        <div className="max-w-xl mx-auto"><SingleEntryForm categories={categories} trips={trips} currentMonth={currentMonth} users={users} currency={currency} theme={theme} getInputClass={getInputClass} onAddEntry={(e) => setEntries(p => [...p, { ...e, id: generateId() }])} /></div>
+                        <div className="max-w-xl mx-auto"><SingleEntryForm categories={categories} trips={trips} entries={entries} currentMonth={currentMonth} users={users} currency={currency} theme={theme} getInputClass={getInputClass} currentUser={currentUser} prefillData={prefillData} onClearPrefill={() => setPrefillData(null)} onAddEntry={(e) => setEntries(p => [...p, { ...e, id: generateId() }])} /></div>
                     )}
                     {activeRegisterView === 'income' && (
                         <IncomeManager incomes={incomes} currentMonth={currentMonth} users={users} currency={currency} onAddIncome={(s, a, r, ir, mid) => setIncomes(p => [...p, {id: generateId(), monthId: mid, source: s, amount: a, recipient: r, isRecurring: ir}])} onDeleteIncome={(id) => setIncomes(p => p.filter(i => i.id !== id))} />
@@ -625,7 +632,17 @@ function App({ instanceId, onExit }: AppProps) {
                   users={users}
                   currency={currency}
                   theme={theme}
+                  currentUser={currentUser}
+                  chatSessions={chatSessions}
+                  onUpdateChatSessions={setChatSessions}
                   onDeleteEntries={(ids) => setEntries(prev => prev.filter(e => !ids.includes(e.id)))}
+                  onAddEntries={(newEntries) => setEntries(prev => [...prev, ...newEntries.map(e => ({ ...e, id: generateId() }))])}
+                  onAddIncome={(source, amount, recipient, monthId) => setIncomes(prev => [...prev, { id: generateId(), monthId, source, amount, recipient, isRecurring: false }])}
+                  onNavigateToExpense={(prefill) => {
+                    setPrefillData(prefill);
+                    setActiveMainTab('register');
+                    setActiveRegisterView('single');
+                  }}
               />
             )}
 

@@ -194,7 +194,7 @@ app.patch('/api/instance/:id/rename', (req, res) => {
 const aiConfig = {
     apiKey: process.env.AI_API_KEY || '',
     provider: process.env.AI_PROVIDER || 'gemini',
-    model: process.env.AI_MODEL || 'gemini-2.0-flash',
+    model: process.env.AI_MODEL || 'gemini-3.1-flash-lite-preview',
     baseUrl: process.env.AI_BASE_URL || 'https://api.openai.com/v1',
 };
 
@@ -223,20 +223,30 @@ app.post('/api/config/ai', (req, res) => {
  * Calls the configured AI provider and returns the text response.
  * Supports: Gemini (google.generativeai) and OpenAI-compatible APIs.
  */
-async function callAI(systemPrompt, userMessage, imageBase64 = null, imageMimeType = null) {
+async function callAI(systemPrompt, userMessage, imageBase64 = null, imageMimeType = null, conversationHistory = null) {
     if (!aiConfig.apiKey) throw new Error('AI API key not configured. Go to Settings → AI Configuration to add your key.');
 
     if (aiConfig.provider === 'gemini') {
         const url = `https://generativelanguage.googleapis.com/v1beta/models/${aiConfig.model}:generateContent?key=${aiConfig.apiKey}`;
+
+        // Build contents array with conversation history
+        const contents = [];
+        if (conversationHistory && conversationHistory.length > 0) {
+            for (const msg of conversationHistory) {
+                contents.push({ role: msg.role === 'assistant' ? 'model' : 'user', parts: [{ text: msg.content }] });
+            }
+        }
+
         const parts = [];
         if (imageBase64 && imageMimeType) {
             parts.push({ inline_data: { mime_type: imageMimeType, data: imageBase64 } });
         }
         parts.push({ text: userMessage });
+        contents.push({ role: 'user', parts });
 
         const body = {
             system_instruction: { parts: [{ text: systemPrompt }] },
-            contents: [{ role: 'user', parts }],
+            contents,
             generationConfig: { temperature: 0.3, maxOutputTokens: 2048 }
         };
         const res = await fetch(url, {
@@ -255,11 +265,18 @@ async function callAI(systemPrompt, userMessage, imageBase64 = null, imageMimeTy
     // OpenAI-compatible fallback
     const messages = [
         { role: 'system', content: systemPrompt },
-        { role: 'user', content: imageBase64
+    ];
+    if (conversationHistory && conversationHistory.length > 0) {
+        for (const msg of conversationHistory) {
+            messages.push({ role: msg.role, content: msg.content });
+        }
+    }
+    messages.push({
+        role: 'user',
+        content: imageBase64
             ? [{ type: 'image_url', image_url: { url: `data:${imageMimeType};base64,${imageBase64}` } }, { type: 'text', text: userMessage }]
             : userMessage
-        }
-    ];
+    });
     const res = await fetch(`${aiConfig.baseUrl}/chat/completions`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${aiConfig.apiKey}` },
@@ -275,12 +292,15 @@ async function callAI(systemPrompt, userMessage, imageBase64 = null, imageMimeTy
 
 // Chat endpoint — question answering about finances
 app.post('/api/ai/chat', async (req, res) => {
-    const { message, context } = req.body;
+    const { message, context, currentUser, conversationHistory } = req.body;
     if (!message) { res.status(400).json({ error: 'Missing message' }); return; }
 
+    const currentUserInfo = currentUser ? `\nThe person asking is "${currentUser.name}" (${currentUser.id}).` : '';
+    const currentMonthInfo = context?.currentMonth ? `\nThe current month is ${context.currentMonth}.` : '';
     const systemPrompt = `You are a personal finance assistant for FairShare, a couples expense tracking app.
-You have access to the user's financial data provided in context.
+You have access to the user's financial data provided in context.${currentUserInfo}${currentMonthInfo}
 Answer questions concisely. When referencing amounts, use the currency symbol from context.
+When the user wants to add an expense, income, or savings entry, always confirm: (1) the month (default: current month shown in context), and (2) which account it belongs to (default: the current user's account). Ask these before confirming the action.
 If asked to fix data issues, respond with a JSON action object like:
 {"action":"delete_entries","ids":["id1","id2"]} or {"action":"none"} if no data change needed.
 Always explain what you found before suggesting any action.`;
@@ -290,7 +310,7 @@ Always explain what you found before suggesting any action.`;
         : message;
 
     try {
-        const reply = await callAI(systemPrompt, userMsg);
+        const reply = await callAI(systemPrompt, userMsg, null, null, conversationHistory || null);
         res.json({ reply });
     } catch (e) {
         console.error('AI chat error:', e.message);
@@ -341,6 +361,27 @@ Focus on: budget overruns, unusual spikes, savings opportunities, unbalanced con
         res.json({ insights });
     } catch (e) {
         console.error('AI review error:', e.message);
+        res.status(500).json({ error: e.message });
+    }
+});
+
+// Bank statement parse endpoint — extract transactions from a PDF or image
+app.post('/api/ai/parse-statement', async (req, res) => {
+    const { attachmentBase64, mimeType, owner } = req.body;
+    if (!attachmentBase64) { res.status(400).json({ error: 'Missing attachmentBase64' }); return; }
+
+    const systemPrompt = `You are a bank statement parser. Extract all transactions from this document and respond ONLY with a valid JSON array (no markdown, no explanation). Each transaction should have:
+[{"date":"YYYY-MM-DD","description":"merchant or transaction description","amount":number,"suggestedCategory":"one of: Groceries, Bar & Restaurants, Transport, Shopping, Health, Entertainment, Travel, Subscriptions, Utilities, Rent, Insurance, Other"}]
+Positive amounts are expenses/debits. Negative amounts are income/credits. Parse ALL transactions you can find. Be thorough.
+If you cannot read the document, return {"error": "Cannot parse statement"}.`;
+
+    try {
+        const raw = await callAI(systemPrompt, 'Parse all transactions from this bank statement.', attachmentBase64, mimeType || 'application/pdf');
+        const cleaned = raw.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+        const parsed = JSON.parse(cleaned);
+        res.json({ transactions: Array.isArray(parsed) ? parsed : [], owner: owner || 'SHARED' });
+    } catch (e) {
+        console.error('Statement parse error:', e.message);
         res.status(500).json({ error: e.message });
     }
 });

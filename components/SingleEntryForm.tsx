@@ -1,14 +1,18 @@
-import React, { useState } from 'react';
-import { Category, ExpenseEntry, AccountType, Trip, User, CurrencyCode } from '../types';
-import { Plus, Plane } from 'lucide-react';
+import React, { useState, useRef, useEffect } from 'react';
+import { Category, ExpenseEntry, AccountType, Trip, User, CurrencyCode, CurrentUserId } from '../types';
+import { Plus, Plane, Camera, Loader } from 'lucide-react';
 
 interface SingleEntryFormProps {
   categories: Category[];
   trips: Trip[];
+  entries?: ExpenseEntry[];
   currentMonth: string;
   users: Record<string, User>;
   currency: CurrencyCode;
   theme?: 'light' | 'dark';
+  currentUser: CurrentUserId;
+  prefillData?: Partial<ExpenseEntry> | null;
+  onClearPrefill?: () => void;
   getInputClass: (isInput?: boolean) => string;
   onAddEntry: (entry: Omit<ExpenseEntry, 'id'>) => void;
 }
@@ -18,16 +22,33 @@ const CURRENCY_SYMBOL: Record<string, string> = { EUR: '€', GBP: '£', JPY: '�
 const CATEGORY_GROUPS = ['SHARED', 'USER_1', 'USER_2'] as const;
 
 export const SingleEntryForm: React.FC<SingleEntryFormProps> = ({
-  categories, trips, currentMonth, users, currency, theme = 'light', getInputClass, onAddEntry
+  categories, trips, entries = [], currentMonth, users, currency, theme = 'light', currentUser, prefillData, onClearPrefill, getInputClass, onAddEntry
 }) => {
+  const defaultAccount: AccountType = currentUser === 'user_1' ? 'USER_1' : 'USER_2';
   const [amount, setAmount] = useState('');
   const [description, setDescription] = useState('');
   const [categoryId, setCategoryId] = useState(categories[0]?.id || '');
-  const [account, setAccount] = useState<AccountType>('SHARED');
+  const [account, setAccount] = useState<AccountType>(defaultAccount);
   const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
   const [selectedTripIds, setSelectedTripIds] = useState<string[]>([]);
   const [tripCategory, setTripCategory] = useState<ExpenseEntry['tripCategory']>('OTHER');
   const [submitted, setSubmitted] = useState(false);
+  const [linkedExpenseId, setLinkedExpenseId] = useState<string | undefined>(undefined);
+  const [scanLoading, setScanLoading] = useState(false);
+  const [scanMessage, setScanMessage] = useState('');
+  const scanInputRef = useRef<HTMLInputElement>(null);
+
+  // Handle prefill from AI
+  useEffect(() => {
+    if (prefillData) {
+      if (prefillData.amount) setAmount(String(prefillData.amount));
+      if (prefillData.description) setDescription(prefillData.description);
+      if (prefillData.date) setDate(prefillData.date);
+      if (prefillData.categoryId) setCategoryId(prefillData.categoryId);
+      if (prefillData.account) setAccount(prefillData.account);
+      onClearPrefill?.();
+    }
+  }, [prefillData]);
 
   if (!users || !users.user_1 || !users.user_2) return <div>Loading users...</div>;
 
@@ -52,12 +73,53 @@ export const SingleEntryForm: React.FC<SingleEntryFormProps> = ({
       entryType: 'single',
       tripId: isTravelCategory ? selectedTripIds : undefined,
       tripCategory: isTravelCategory ? tripCategory : undefined,
+      linkedExpenseId: parseFloat(amount) < 0 ? linkedExpenseId : undefined,
     });
     setAmount('');
     setDescription('');
+    setLinkedExpenseId(undefined);
     setSubmitted(true);
     setTimeout(() => setSubmitted(false), 1200);
     if (isTravelCategory) { setSelectedTripIds([]); setTripCategory('OTHER'); }
+  };
+
+  const handleScanReceipt = (file: File) => {
+    setScanLoading(true);
+    setScanMessage('');
+    const reader = new FileReader();
+    reader.onload = async (ev) => {
+      const dataUrl = ev.target?.result as string;
+      const base64 = dataUrl.split(',')[1];
+      const mimeType = file.type || 'image/jpeg';
+      try {
+        const res = await fetch('/api/ai/scan-receipt', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ imageBase64: base64, mimeType })
+        });
+        const data = await res.json();
+        if (!res.ok || data.error) throw new Error(data.error || 'Scan failed');
+        // Pre-fill form
+        if (data.amount) setAmount(String(data.amount));
+        if (data.description) setDescription(data.description);
+        if (data.date) setDate(data.date);
+        // Try to match category
+        if (data.suggestedCategory) {
+          const match = categories.find(c =>
+            c.name.toLowerCase().includes(data.suggestedCategory.toLowerCase()) ||
+            data.suggestedCategory.toLowerCase().includes(c.name.toLowerCase())
+          );
+          if (match) setCategoryId(match.id);
+        }
+        setScanMessage('Receipt scanned! Review and submit.');
+      } catch (e: any) {
+        setScanMessage(`Scan failed: ${e.message}`);
+      } finally {
+        setScanLoading(false);
+        if (scanInputRef.current) scanInputRef.current.value = '';
+      }
+    };
+    reader.readAsDataURL(file);
   };
 
   const handleTripSelection = (tripId: string) => {
@@ -87,6 +149,38 @@ export const SingleEntryForm: React.FC<SingleEntryFormProps> = ({
       <div className="h-1 bg-gradient-to-r from-indigo-500 via-violet-500 to-purple-500" />
 
       <form onSubmit={handleSubmit} className="p-6 space-y-5">
+
+        {/* Scan Receipt Button */}
+        <div className="flex items-center justify-between">
+          <span className={`text-xs font-bold uppercase tracking-widest ${isDark ? 'text-slate-500' : 'text-slate-400'}`}>
+            New Expense
+          </span>
+          <label className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold cursor-pointer transition ${
+            scanLoading
+              ? 'bg-indigo-100 text-indigo-400'
+              : isDark
+                ? 'bg-slate-800 text-slate-300 hover:bg-slate-700'
+                : 'bg-slate-100 text-slate-600 hover:bg-indigo-50 hover:text-indigo-600'
+          }`}>
+            {scanLoading ? <Loader size={13} className="animate-spin" /> : <Camera size={13} />}
+            {scanLoading ? 'Scanning...' : 'Scan Receipt'}
+            <input
+              ref={scanInputRef}
+              type="file"
+              accept="image/*"
+              capture="environment"
+              className="hidden"
+              disabled={scanLoading}
+              onChange={e => e.target.files?.[0] && handleScanReceipt(e.target.files[0])}
+            />
+          </label>
+        </div>
+
+        {scanMessage && (
+          <div className={`text-xs px-3 py-2 rounded-lg ${scanMessage.includes('failed') ? 'bg-red-50 text-red-600 border border-red-200' : 'bg-emerald-50 text-emerald-700 border border-emerald-200'}`}>
+            {scanMessage}
+          </div>
+        )}
 
         {/* Amount — prominent */}
         <div>
@@ -192,6 +286,29 @@ export const SingleEntryForm: React.FC<SingleEntryFormProps> = ({
           </div>
         </div>
 
+        {/* Deduction link — shown when amount is negative */}
+        {parseFloat(amount) < 0 && (
+          <div>
+            <label className={labelCls}>Links to expense (optional)</label>
+            <select
+              value={linkedExpenseId || ''}
+              onChange={e => setLinkedExpenseId(e.target.value || undefined)}
+              className={inputCls}
+            >
+              <option value="">— none —</option>
+              {entries
+                .filter(e => e.amount > 0 && e.entryType === 'single')
+                .sort((a, b) => (b.date || b.monthId).localeCompare(a.date || a.monthId))
+                .slice(0, 50)
+                .map(e => (
+                  <option key={e.id} value={e.id}>
+                    {e.description?.slice(0, 30) || categories.find(c => c.id === e.categoryId)?.name} — {symbol}{e.amount.toFixed(2)} ({e.date || e.monthId})
+                  </option>
+                ))}
+            </select>
+          </div>
+        )}
+
         {/* Travel details */}
         {isTravelCategory && (
           <div className={`rounded-xl border p-4 space-y-3 animate-in fade-in slide-in-from-bottom-1 duration-200 ${isDark ? 'bg-indigo-950/40 border-indigo-800/40' : 'bg-indigo-50/80 border-indigo-100'}`}>
@@ -208,7 +325,7 @@ export const SingleEntryForm: React.FC<SingleEntryFormProps> = ({
                       {t.name}
                     </label>
                   ))}
-                  {trips.length === 0 && <p className="text-[11px] text-red-500 px-2 py-1">No trips — create one in Planning → Trips first.</p>}
+                  {trips.length === 0 && <p className="text-[11px] text-red-500 px-2 py-1">No trips — create one in Planning first.</p>}
                 </div>
               </div>
               <div>
@@ -235,7 +352,7 @@ export const SingleEntryForm: React.FC<SingleEntryFormProps> = ({
           }`}
         >
           {submitted ? (
-            <span className="animate-in fade-in">Added ✓</span>
+            <span className="animate-in fade-in">Added</span>
           ) : (
             <><Plus size={16} /> Add Expense</>
           )}
