@@ -104,11 +104,12 @@ function toChatMessage(msg: Message): ChatMessage {
   };
 }
 
-// Lightweight markdown renderer: bold, bullet lists, line breaks
-function renderMarkdown(text: string, isDark: boolean): React.ReactNode {
+// Lightweight markdown renderer: bold, bullet lists, tables, line breaks
+function renderMarkdown(text: string, isDark: boolean, onDeleteEntry?: (id: string) => void): React.ReactNode {
   const lines = text.split('\n');
   const nodes: React.ReactNode[] = [];
   let key = 0;
+  let i = 0;
 
   const renderInline = (line: string): React.ReactNode => {
     const parts = line.split(/(\*\*[^*]+\*\*)/g);
@@ -120,8 +121,61 @@ function renderMarkdown(text: string, isDark: boolean): React.ReactNode {
     });
   };
 
-  for (let i = 0; i < lines.length; i++) {
+  const isTableRow = (line: string) => line.trim().startsWith('|') && line.trim().endsWith('|');
+  const parseRow = (line: string) => line.trim().slice(1, -1).split('|').map(c => c.trim());
+
+  while (i < lines.length) {
     const line = lines[i];
+
+    // Markdown table
+    if (isTableRow(line) && i + 1 < lines.length && /^\|[-| :]+\|$/.test(lines[i + 1].trim())) {
+      const headers = parseRow(line);
+      i += 2; // skip header + separator
+      const idColIdx = headers.findIndex(h => h.toLowerCase() === 'id');
+      const visibleHeaders = headers.filter((_, j) => j !== idColIdx);
+      const rows: React.ReactNode[] = [];
+
+      while (i < lines.length && isTableRow(lines[i])) {
+        const cells = parseRow(lines[i]);
+        const rowId = idColIdx >= 0 ? cells[idColIdx] : undefined;
+        const visibleCells = cells.filter((_, j) => j !== idColIdx);
+        rows.push(
+          <tr key={i} className={`border-t ${isDark ? 'border-slate-700' : 'border-slate-200'}`}>
+            {visibleCells.map((cell, j) => (
+              <td key={j} className="px-2 py-1 text-xs">{renderInline(cell)}</td>
+            ))}
+            {onDeleteEntry && rowId && (
+              <td className="px-2 py-1">
+                <button
+                  onClick={() => onDeleteEntry(rowId)}
+                  className={`text-[10px] px-1.5 py-0.5 rounded transition ${isDark ? 'text-red-400 hover:bg-red-900/40' : 'text-red-500 hover:bg-red-50'}`}
+                  title="Delete entry"
+                >✕</button>
+              </td>
+            )}
+          </tr>
+        );
+        i++;
+      }
+
+      nodes.push(
+        <div key={key++} className="overflow-x-auto my-2">
+          <table className={`w-full text-xs rounded-lg border ${isDark ? 'border-slate-700' : 'border-slate-200'}`}>
+            <thead>
+              <tr className={isDark ? 'bg-slate-800' : 'bg-slate-50'}>
+                {visibleHeaders.map((h, j) => (
+                  <th key={j} className="px-2 py-1.5 text-left font-semibold">{h}</th>
+                ))}
+                {onDeleteEntry && idColIdx >= 0 && <th className="px-2 py-1.5 w-8" />}
+              </tr>
+            </thead>
+            <tbody>{rows}</tbody>
+          </table>
+        </div>
+      );
+      continue;
+    }
+
     if (line.startsWith('• ') || line.startsWith('- ')) {
       nodes.push(
         <div key={key++} className="flex gap-1.5 my-0.5">
@@ -134,6 +188,7 @@ function renderMarkdown(text: string, isDark: boolean): React.ReactNode {
     } else {
       nodes.push(<div key={key++}>{renderInline(line)}</div>);
     }
+    i++;
   }
   return <>{nodes}</>;
 }
@@ -408,10 +463,13 @@ export const AIAssistant: React.FC<AIAssistantProps> = ({
         }
         let displayReply = reply;
         try {
-          const jsonMatch = reply.match(/\{[\s\S]*"action"[\s\S]*\}/);
+          // Strip markdown code fences if AI wrapped the JSON despite instructions
+          const stripped = reply.replace(/```(?:json)?\s*([\s\S]*?)\s*```/g, '$1');
+          const jsonMatch = stripped.match(/\{[^{}]*"action"[^{}]*(?:\{[^{}]*\}[^{}]*)?\}/s) ||
+                            stripped.match(/\{[\s\S]*?"action"[\s\S]*?\}/);
           if (jsonMatch) {
             const action = JSON.parse(jsonMatch[0]);
-            const textPart = reply.replace(jsonMatch[0], '').trim();
+            const textPart = stripped.replace(jsonMatch[0], '').replace(/```(?:json)?|```/g, '').trim();
             if (action.action === 'delete_entries' && action.ids?.length && onDeleteEntries) {
               displayReply = textPart + `\n\n_Action: delete ${action.ids.length} entr${action.ids.length === 1 ? 'y' : 'ies'}. [Confirm below]_`;
               setMessages(prev => [...prev,
@@ -886,7 +944,7 @@ export const AIAssistant: React.FC<AIAssistantProps> = ({
                     }`}>
                       {msg.role === 'user'
                         ? msg.text.replace(/_Action available:.*_/, '')
-                        : renderMarkdown(msg.text.replace(/_Action available:.*_/, ''), isDark)}
+                        : renderMarkdown(msg.text.replace(/_Action:.*_/, ''), isDark, onDeleteEntries ? (id) => onDeleteEntries([id]) : undefined)}
                     </div>
                   )}
 
