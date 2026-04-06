@@ -1232,25 +1232,32 @@ export const AIAssistant: React.FC<AIAssistantProps> = ({
                   {msg.pendingQuestions && msg.pendingQuestions.length > 0 && (
                     <div className={`border rounded-xl p-3 space-y-3 ${isDark ? 'bg-indigo-950/40 border-indigo-800/50' : 'bg-indigo-50 border-indigo-200'}`}>
                       <p className={`text-xs font-bold ${isDark ? 'text-indigo-300' : 'text-indigo-700'}`}>Clarification needed:</p>
-                      {msg.pendingQuestions.map((q, qi) => (
-                        <div key={qi} className="space-y-1.5">
-                          {q.transactionDescription && (
-                            <p className={`text-[10px] font-semibold uppercase tracking-wider ${isDark ? 'text-slate-500' : 'text-slate-400'}`}>{q.transactionDescription}</p>
-                          )}
-                          <p className={`text-sm ${isDark ? 'text-slate-200' : 'text-slate-800'}`}>{q.question}</p>
-                          <div className="flex flex-wrap gap-1.5">
-                            {q.options.map((opt, oi) => (
-                              <button key={oi}
-                                onClick={() => {
-                                  setInput(opt);
-                                }}
-                                className={`text-xs px-2.5 py-1 rounded-lg border font-medium transition ${isDark ? 'border-indigo-700 text-indigo-300 hover:bg-indigo-900' : 'border-indigo-300 text-indigo-700 hover:bg-indigo-100'}`}>
-                                {opt}
-                              </button>
-                            ))}
+                      {msg.pendingQuestions.map((q, qi) => {
+                        // Resolve a value that may be a category ID to its human-readable name
+                        const resolveName = (val: string) =>
+                          categories.find(c => c.id === val)?.name ?? val;
+                        // transactionDescription may be a raw ID — only show if it looks like text
+                        const descLabel = q.transactionDescription && !/^[a-z0-9]{6,}$/.test(q.transactionDescription)
+                          ? q.transactionDescription
+                          : undefined;
+                        return (
+                          <div key={qi} className="space-y-1.5">
+                            {descLabel && (
+                              <p className={`text-[10px] font-semibold uppercase tracking-wider ${isDark ? 'text-slate-500' : 'text-slate-400'}`}>{descLabel}</p>
+                            )}
+                            <p className={`text-sm ${isDark ? 'text-slate-200' : 'text-slate-800'}`}>{q.question}</p>
+                            <div className="flex flex-wrap gap-1.5">
+                              {q.options.map((opt, oi) => (
+                                <button key={oi}
+                                  onClick={() => setInput(resolveName(opt))}
+                                  className={`text-xs px-2.5 py-1 rounded-lg border font-medium transition ${isDark ? 'border-indigo-700 text-indigo-300 hover:bg-indigo-900' : 'border-indigo-300 text-indigo-700 hover:bg-indigo-100'}`}>
+                                  {resolveName(opt)}
+                                </button>
+                              ))}
+                            </div>
                           </div>
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   )}
                 </div>

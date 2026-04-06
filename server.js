@@ -575,11 +575,12 @@ app.post('/api/ai/parse-statement', async (req, res) => {
 Extract all transactions from this document and respond ONLY with a valid JSON object (no markdown, no explanation):
 {
   "transactions": [{"date":"YYYY-MM-DD","description":"merchant or transaction description","amount":number,"categoryId":"one of the category IDs above","confidence":"high|low"}],
-  "pendingQuestions": [{"transactionDescription":"...","question":"Why are you unsure?","options":["categoryId1","categoryId2"]}]
+  "pendingQuestions": [{"transactionDescription":"human-readable merchant name","question":"Why are you unsure?","options":["Category Name 1","Category Name 2"]}]
 }
 Rules:
 - Map each transaction to the most appropriate categoryId from the list above.
 - If confidence is "low" (ambiguous transaction), add an entry to pendingQuestions instead of guessing.
+- In pendingQuestions: transactionDescription must be the merchant/payee name (human readable, NOT an ID). options must be category names (human readable), NOT category IDs.
 - Positive amounts are expenses/debits. Negative amounts are income/credits.
 - Parse ALL transactions. Be thorough.
 - If you cannot read the document, return {"error": "Cannot parse statement"}.`;
